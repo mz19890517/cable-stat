@@ -116,7 +116,11 @@ class Repository(private val db: AppDatabase) {
         fun parseLengths(text: String): LengthParse {
             val ok = mutableListOf<Long>()
             val invalid = mutableListOf<String>()
-            text.split(SEPARATORS)
+            // 先把乘法片段内部空白归一（"32 × 3" → "32×3"），避免被分隔符切散
+            val normalized = MUL_REGEX.replace(text) { m ->
+                "${m.groupValues[1]}×${m.groupValues[2]}"
+            }
+            normalized.split(SEPARATORS)
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .forEach { t ->
