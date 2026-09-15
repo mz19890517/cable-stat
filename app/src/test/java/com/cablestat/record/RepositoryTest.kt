@@ -7,6 +7,7 @@ import com.cablestat.record.data.db.ColorEntity
 import com.cablestat.record.data.db.Kind
 import com.cablestat.record.data.db.RecordEntity
 import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -77,11 +78,13 @@ class AggregateTest {
         ).allowMainThreadQueries().build()
         repo = Repository(db)
         projectId = UUID.randomUUID().toString()
-        db.projectDao().insert(
-            com.cablestat.record.data.db.ProjectEntity(
-                id = projectId, name = "测试柜", remark = "", createdAt = 1L, updatedAt = 1L
+        runBlocking {
+            db.projectDao().insert(
+                com.cablestat.record.data.db.ProjectEntity(
+                    id = projectId, name = "测试柜", remark = "", createdAt = 1L, updatedAt = 1L
+                )
             )
-        )
+        }
     }
 
     @After
