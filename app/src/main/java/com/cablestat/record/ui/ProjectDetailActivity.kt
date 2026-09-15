@@ -270,7 +270,7 @@ class ProjectDetailActivity : AppCompatActivity() {
                         Color.blue(color)
                     )
                 )
-                setStroke(1f * density, Color.argb(0x66, Color.red(color), Color.green(color), Color.blue(color)))
+                setStroke((1f * density).toInt(), Color.argb(0x66, Color.red(color), Color.green(color), Color.blue(color)))
             }
         }
     }
