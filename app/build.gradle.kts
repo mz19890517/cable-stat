@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
 android {
     namespace = "com.cablestat.record"
     compileSdk = 34
@@ -54,6 +57,12 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all {
+                it.testLogging {
+                    events = setOf(TestLogEvent.FAILED, TestLogEvent.SKIPPED)
+                    exceptionFormat = TestExceptionFormat.FULL
+                }
+            }
         }
     }
 }

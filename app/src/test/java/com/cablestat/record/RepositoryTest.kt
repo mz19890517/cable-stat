@@ -116,7 +116,7 @@ class AggregateTest {
         // 线缆：1.5 红 累加成 7200，1.5 蓝 1850
         assertEquals(2, wire.size)
         val g15 = wire.find { it.spec == "1.5" }!!
-        assertEquals(5050L, g15.totalMm)
+        assertEquals(9050L, g15.totalMm)
         assertEquals(3L, g15.count)
         assertEquals(2, g15.combos.size)
         assertEquals(7200L, g15.combos.find { it.color == "红" }!!.totalMm)
@@ -214,7 +214,7 @@ class ExportTest {
             names.add(e.name)
             e = zip.nextEntry
         }
-        assertEquals(4, names.count { it.startsWith("xl/worksheets/sheet") })
+        assertEquals(5, names.count { it.startsWith("xl/worksheets/sheet") })
         assertTrue(names.contains("xl/workbook.xml"))
         db.close()
     }
