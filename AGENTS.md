@@ -25,6 +25,7 @@ projects(配电柜项目，多项目分开统计) → records(用线/用铜记�
 包名 `com.cablestat.record`，alias=`cablestat`，签名链开线即固定，后续所有版本靠同一签名覆盖安装。签名材料：
 - `app/signing/cablestat.keystore.zip` —— keystore 的加密压缩包（已入库）
 - **解压密码不在仓库里，需要时向当前机器 ~/.config/gh/hosts.yml 的 GitHub 账户所有者（用户本人）索取**；GitHub Secrets 已存：`SIGNING_ZIP_PASSWORD` / `SIGNING_STORE_PASSWORD` / `SIGNING_KEY_PASSWORD`
+- 注意：keystore 为 PKCS12，私钥只用 keystore 密码解锁 ⇒ `SIGNING_KEY_PASSWORD` 与 `SIGNING_STORE_PASSWORD` 必须相同（Android 签名库不做 keytool 那样的忽略，不同会 BadPaddingException）
 - 原始 `cablestat.keystore` 被 .gitignore 排除，app/signing/ 下原件不要提交
 
 规则：

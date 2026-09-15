@@ -32,7 +32,7 @@ gh run download <runId> -n cablestat-debug-apk  # 下载 APK
 
 ## 签名
 
-固定签名链（alias=`cablestat`），后续所有版本可覆盖安装。keystore 为加密压缩包入库（app/signing/cablestat.keystore.zip），密码存于 GitHub Secrets（SIGNING_ZIP_PASSWORD / SIGNING_STORE_PASSWORD / SIGNING_KEY_PASSWORD），**密码请本人自行备份**。
+固定签名链（alias=`cablestat`），后续所有版本可覆盖安装。keystore 为加密压缩包入库（app/signing/cablestat.keystore.zip），密码存于 GitHub Secrets（SIGNING_ZIP_PASSWORD / SIGNING_STORE_PASSWORD / SIGNING_KEY_PASSWORD），**密码请本人自行备份**。注意 keystore 为 PKCS12，`SIGNING_KEY_PASSWORD` 需与 `SIGNING_STORE_PASSWORD` 相同。
 
 ## 测试
 
