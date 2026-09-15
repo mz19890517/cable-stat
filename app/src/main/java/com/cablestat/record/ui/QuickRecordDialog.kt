@@ -38,6 +38,7 @@ object QuickRecordDialog {
         onSaved: (kind: String, spec: String, color: String, lengths: List<Long>, note: String) -> Unit
     ) {
         val vb = DialogRecordBinding.inflate(LayoutInflater.from(context))
+        val unit = LengthUnit.current(context)
         var kind = if (presetKind == Kind.BUSBAR) Kind.BUSBAR else Kind.WIRE
 
         // ---------- 辅助：当前选中的规格/颜色/累计 ----------
@@ -139,7 +140,6 @@ object QuickRecordDialog {
 
         // ---------- 初始状态 ----------
 
-        val unit = LengthUnit.current(context)
         vb.chipKindWire.isChecked = kind == Kind.WIRE
         vb.chipKindBusbar.isChecked = kind == Kind.BUSBAR
         vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²）"
