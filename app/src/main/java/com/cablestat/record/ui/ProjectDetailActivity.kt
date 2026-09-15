@@ -1,6 +1,7 @@
 package com.cablestat.record.ui
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -248,10 +249,28 @@ class ProjectDetailActivity : AppCompatActivity() {
                 vb.tvComboTotal.text = Fmt.length(c.totalMm)
                 vb.tvComboCount.text = "×${c.count}"
                 vb.vColorDot.setBackgroundColor(WireColor.of(c.color))
+                vb.root.background = colorCard(WireColor.of(c.color))
                 vb.root.setOnClickListener { openHistory(c.kind, c.spec, c.color) }
                 vb.btnComboAdd.setOnClickListener {
                     quickRecord(c.kind, c.spec, c.color)
                 }
+            }
+        }
+
+        /** 半透明颜色卡片：白底混入线缆色，保持文字可读 */
+        private fun colorCard(color: Int): android.graphics.drawable.GradientDrawable {
+            val density = resources.displayMetrics.density
+            return android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 8 * density
+                setColor(
+                    Color.argb(
+                        0x26,
+                        Color.red(color),
+                        Color.green(color),
+                        Color.blue(color)
+                    )
+                )
+                setStroke(1f * density, Color.argb(0x66, Color.red(color), Color.green(color), Color.blue(color)))
             }
         }
     }

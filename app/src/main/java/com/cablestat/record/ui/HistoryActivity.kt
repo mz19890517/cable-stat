@@ -88,7 +88,7 @@ class HistoryActivity : AppCompatActivity() {
         vb.etEditLen.setText(r.lengthMm.toString())
         vb.etEditNote.setText(r.note)
         AlertDialog.Builder(this)
-            .setTitle(if (r.kind == Kind.WIRE) "${wSpec(r.spec)} $r.color · 修改" else "$r.spec 铜排 · 修改")
+            .setTitle(if (r.kind == Kind.WIRE) "${wSpec(r.spec)} ${r.color} · 修改" else "${r.spec} 铜排 · 修改")
             .setView(vb.root)
             .setPositiveButton("保存") { _, _ ->
                 val len = vb.etEditLen.text.toString().toLongOrNull() ?: 0L
@@ -138,7 +138,7 @@ class HistoryActivity : AppCompatActivity() {
         inner class VH(private val vb: ItemHistoryBinding) : RecyclerView.ViewHolder(vb.root) {
             fun bind(r: RecordEntity) {
                 vb.tvHistTime.text = DT.dateTimeSec(r.createdAt)
-                vb.tvHistSpec.text = if (r.kind == Kind.WIRE) wSpec(r.spec) + (if (r.color.isNotEmpty()) " $r.color" else "") else r.spec
+                vb.tvHistSpec.text = if (r.kind == Kind.WIRE) wSpec(r.spec) + (if (r.color.isNotEmpty()) " ${r.color}" else "") else r.spec
                 vb.tvHistLen.text = Fmt.length(r.lengthMm)
                 vb.tvHistNote.text = r.note
                 vb.tvHistNote.visibility = if (r.note.isEmpty()) View.GONE else View.VISIBLE

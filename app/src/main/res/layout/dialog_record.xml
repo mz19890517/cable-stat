@@ -10,6 +10,17 @@
         android:padding="18dp">
 
         <TextView
+            android:id="@+id/tv_append_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@color/primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tv_kind_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="分类"
@@ -132,6 +143,7 @@
             android:layout_marginTop="2dp" />
 
         <TextView
+            android:id="@+id/tv_note_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="备注（可空）"
@@ -148,5 +160,50 @@
             android:inputType="text"
             android:importantForAutofill="no"
             android:layout_marginTop="6dp" />
+
+        <TextView
+            android:id="@+id/tv_stage_add_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:padding="12dp"
+            android:gravity="center"
+            android:text="＋ 添加到批量列表"
+            android:textColor="@color/primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:background="@drawable/bg_input" />
+
+        <TextView
+            android:id="@+id/tv_staging_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="批量列表（点击项可编辑/删除）"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_secondary"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/ll_staging"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="4dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/btn_stage_submit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:padding="14dp"
+            android:gravity="center"
+            android:text="全部入库"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="@color/primary" />
     </LinearLayout>
 </ScrollView>
