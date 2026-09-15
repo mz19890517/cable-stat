@@ -8,6 +8,7 @@
 projects(配电柜项目，多项目分开统计) → records(用线/用铜记录，截一根记一根) + specs/colors(规格·颜色候选池)。
 
 - records 字段：kind(wire/busbar) / spec(线缆=截面mm²数字串；铜排=宽×厚如"40×5") / color(仅线缆，铜排为""；市面常用国标线色) / lengthMm(毫米，唯一计量单位) / note / createdAt
+- 录入长度支持多行每行一根 + "85×5"同长多根批量（Repository.parseLengths 展开，根数上限500）；默认录入单位(mm/cm/m)存 SharedPreferences(util/LengthUnit)，录入时换算为毫米后入库，DB 内永远毫米
 - **累加语义**：不做预先生成的"台账行"，全部按 GROUP BY 规格×颜色 在内存累加（Repository.aggregate），同一规格×颜色自动汇总，改任何一段必须回归 AggregateTest
 - 候选池首启种子：线缆规格 1.0~240 mm²(16档)、颜色 红/黄/绿/蓝/黄绿/黑/棕/白/灰(9色)、铜排规格 20×3~125×10(23档)；规格排序键 线缆=mm²数值、铜排=截面积
 - 规格尾零归一：录入自定义线缆规格时 4.0→4 入库，避免与内置重复（Repository.normalizeWireLabel）

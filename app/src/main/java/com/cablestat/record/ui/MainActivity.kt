@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.fabAddProject.setOnClickListener { showProjectDialog(null) }
         binding.btnSettings.setOnClickListener {
-            startActivity(Intent(this, CandidateManagerActivity::class.java))
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.btnExport.setOnClickListener {
             exportLauncher.launch("线缆统计_${DT.date(System.currentTimeMillis())}.xlsx")

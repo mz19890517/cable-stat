@@ -14,6 +14,7 @@ import com.cablestat.record.data.db.RecordEntity
 import com.cablestat.record.data.db.SpecEntity
 import com.cablestat.record.databinding.DialogRecordBinding
 import com.cablestat.record.util.Fmt
+import com.cablestat.record.util.LengthUnit
 import com.cablestat.record.util.WireColor
 import com.google.android.material.chip.Chip
 
@@ -82,9 +83,11 @@ object QuickRecordDialog {
             val lengths = parsed.ok
             val sum = lengths.sum()
             if (sum > 0) {
-                vb.tvLengthPreview.text = "共 ${lengths.size} 根 · 本次计入 ${Fmt.length(sum)}，本次后累计 ${Fmt.length(existing + sum)}"
+                vb.tvLengthPreview.text =
+                    "共 ${lengths.size} 根 · 本次 ${sum}${unit.code}，本次后累计 ${Fmt.length(existing + sum * unit.toMm)}"
             } else {
-                vb.tvLengthPreview.text = "单位：毫米(mm)，1000mm = 1米。每行填一根，可一次填多根"
+                vb.tvLengthPreview.text =
+                    "单位：${unit.label}。每行一根，可一次多行；同一长度多根写 85×5（5根各85）"
             }
         }
 
@@ -136,9 +139,12 @@ object QuickRecordDialog {
 
         // ---------- 初始状态 ----------
 
+        val unit = LengthUnit.current(context)
         vb.chipKindWire.isChecked = kind == Kind.WIRE
         vb.chipKindBusbar.isChecked = kind == Kind.BUSBAR
         vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²）"
+        vb.tvLenLabel.text = "每根长度（${unit.label} ${unit.code}，每行一根，可用 85×5 表示 5 根）"
+        vb.etLength.hint = "每行填一根（单位 ${unit.label}，可一次多行），例如：\n85\n32×5（=5根32）"
 
         vb.cgKind.setOnCheckedStateChangeListener { _, _ ->
             kind = if (vb.chipKindBusbar.isChecked) Kind.BUSBAR else Kind.WIRE
@@ -170,7 +176,7 @@ object QuickRecordDialog {
                 kind == Kind.WIRE && color.isEmpty() -> "请选择线缆颜色"
                 kind == Kind.WIRE && Repository.wireKey(spec) == Double.MAX_VALUE -> "线缆规格需为数字，如 1.5"
                 kind == Kind.BUSBAR && !Repository.isBusbarLike(spec) -> "铜排规格需含 ×，如 40×5"
-                parsed.ok.isEmpty() -> "请填写每根长度（毫米，每行一根），需大于 0"
+                parsed.ok.isEmpty() -> "请填写每根长度（单位 ${unit.label}，每行一根），需大于 0"
                 parsed.invalid.isNotEmpty() -> "以下内容无法识别为长度：${parsed.invalid.joinToString("、")}"
                 else -> null
             }
@@ -178,7 +184,8 @@ object QuickRecordDialog {
                 Toast.makeText(context, invalid, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            onSaved(kind, spec.trim(), if (kind == Kind.WIRE) color else "", parsed.ok, vb.etNote.text.toString().trim())
+            val lengthsMm = parsed.ok.map { it * unit.toMm }
+            onSaved(kind, spec.trim(), if (kind == Kind.WIRE) color else "", lengthsMm, vb.etNote.text.toString().trim())
             dialog.dismiss()
         }
     }

@@ -108,21 +108,45 @@ class Repository(private val db: AppDatabase) {
             spec.any { it == '×' || it == 'x' || it == 'X' || it == '*' }
 
         /**
-         * 解析多行长度输入：每行一根长度（也兼容空格/逗号/分号分隔）。
-         * 分隔符：换行/空格/半全角逗号/分号；片段必须为纯数字且大于 0。
+         * 解析长度输入：每行一根，兼容空格/逗号/分号分隔；
+         * 同一长度多根可用 "85×5"（85 五根，× 也可用 *），自动展开为明细。
+         * 片段必须为纯数字或 "数字×数字"，长度与根数均需大于 0，根数上限 [MAX_MULTIPLY]。
+         * 返回值按当前默认长度单位的原始数值（单位换算由调用方完成）。
          */
         fun parseLengths(text: String): LengthParse {
             val ok = mutableListOf<Long>()
             val invalid = mutableListOf<String>()
-            val tokens = text.split(Regex("[,\\n，;；\\s]+"))
+            text.split(SEPARATORS)
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-            tokens.forEach { t ->
-                val v = t.toLongOrNull()
-                if (v != null && v > 0) ok.add(v) else invalid.add(t)
-            }
+                .forEach { t ->
+                    if (!parseToken(t, ok)) invalid.add(t)
+                }
             return LengthParse(ok, invalid)
         }
+
+        /** 同长度多根展开上限，防止误输入导致展开过大 */
+        private const val MAX_MULTIPLY = 500
+
+        /** "850" 或 "850×5" → 追加到 out；成功返回 true */
+        private fun parseToken(t: String, out: MutableList<Long>): Boolean {
+            MUL_REGEX.matchEntire(t)?.let { m ->
+                val len = m.groupValues[1].toLong()
+                val count = m.groupValues[2].toLong()
+                if (len <= 0 || count <= 0 || count > MAX_MULTIPLY) return false
+                repeat(count.toInt()) { out.add(len) }
+                return true
+            }
+            val v = t.toLongOrNull()
+            if (v != null && v > 0) {
+                out.add(v)
+                return true
+            }
+            return false
+        }
+
+        private val SEPARATORS = Regex("[,\\n，;；\\s]+")
+        private val MUL_REGEX = Regex("(\\d+)\\s*[xX×*]\\s*(\\d+)")
     }
 
     // ---------- 项目 ----------

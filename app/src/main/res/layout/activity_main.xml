@@ -56,7 +56,7 @@
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_settings"
-            android:contentDescription="候选池管理"
+            android:contentDescription="设置"
             android:scaleType="centerInside" />
     </LinearLayout>
 

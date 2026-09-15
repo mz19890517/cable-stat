@@ -202,6 +202,37 @@ class SpecParseTest {
         assertEquals(0, r.ok.size)
         assertEquals(0, r.invalid.size)
     }
+
+    @Test
+    fun parseLengthsMultipliesSameLength() {
+        val r = Repository.parseLengths("85×5\n32*3\n95x2")
+        assertEquals(listOf(85L, 85L, 85L, 85L, 85L, 32L, 32L, 32L, 95L, 95L), r.ok)
+        assertEquals(0, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsMultipliesMixedWithSeparators() {
+        val r = Repository.parseLengths("85×5, 850，32 × 3")
+        assertEquals(listOf(85L, 85L, 85L, 85L, 85L, 850L, 32L, 32L, 32L), r.ok)
+        assertEquals(0, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsRejectsBadMultiply() {
+        val r = Repository.parseLengths("85×0\n85×501\n0×3")
+        assertEquals(0, r.ok.size)
+        assertEquals(3, r.invalid.size)
+    }
+}
+
+class LengthUnitTest {
+
+    @Test
+    fun factors() {
+        assertEquals(1L, com.cablestat.record.util.LengthUnit.MM.toMm)
+        assertEquals(10L, com.cablestat.record.util.LengthUnit.CM.toMm)
+        assertEquals(1000L, com.cablestat.record.util.LengthUnit.M.toMm)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
