@@ -174,6 +174,85 @@ class SpecParseTest {
         assertTrue(Repository.isBusbarLike("40×5"))
         assertTrue(!Repository.isBusbarLike("1.5"))
     }
+
+    @Test
+    fun parseLengthsSplitsMultiLine() {
+        val r = Repository.parseLengths("1850\n3200\n1500")
+        assertEquals(listOf(1850L, 3200L, 1500L), r.ok)
+        assertEquals(0, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsToleratesSeparatorsAndWhitespace() {
+        val r = Repository.parseLengths("1850, 3200；1500 950，")
+        assertEquals(listOf(1850L, 3200L, 1500L, 950L), r.ok)
+        assertEquals(0, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsFlagsInvalidTokens() {
+        val r = Repository.parseLengths("1850\nabc\n0\n-5")
+        assertEquals(listOf(1850L), r.ok)
+        assertEquals(3, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsEmptyInput() {
+        val r = Repository.parseLengths("  \n  ")
+        assertEquals(0, r.ok.size)
+        assertEquals(0, r.invalid.size)
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+class UpdateRecordTest {
+
+    private lateinit var db: AppDatabase
+    private lateinit var repo: Repository
+    private var projectId = ""
+
+    @Before
+    fun setup() {
+        db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(),
+            AppDatabase::class.java
+        ).allowMainThreadQueries().build()
+        repo = Repository(db)
+        projectId = UUID.randomUUID().toString()
+        runBlocking {
+            db.projectDao().insert(
+                com.cablestat.record.data.db.ProjectEntity(
+                    id = projectId, name = "测试柜", remark = "", createdAt = 1L, updatedAt = 1L
+                )
+            )
+            repo.addRecords(projectId, Kind.WIRE, "1.5", "红", listOf(3000L, 4200L, 1850L), "进线")
+        }
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    @Test
+    fun batchAddKeepsEachLineAsDetailAndSums() = runTest {
+        val combo = repo.listCombo(projectId, Kind.WIRE, "1.5", "红")
+        assertEquals(3, combo.size)
+        val (wire, _) = repo.aggregate(projectId)
+        val g = wire.find { it.spec == "1.5" }!!
+        assertEquals(9050L, g.totalMm)
+        assertEquals(3L, g.count)
+    }
+
+    @Test
+    fun updateLengthRecomputesAggregate() = runTest {
+        val combo = repo.listCombo(projectId, Kind.WIRE, "1.5", "红")
+        val target = combo.maxByOrNull { it.lengthMm }!!
+        repo.updateRecord(target.id, 500L, "改短了")
+        val (wire, _) = repo.aggregate(projectId)
+        assertEquals(3000L + 500L + 1850L, wire.find { it.spec == "1.5" }!!.totalMm)
+        val updated = repo.listCombo(projectId, Kind.WIRE, "1.5", "红").find { it.id == target.id }!!
+        assertEquals(500L, updated.lengthMm)
+        assertEquals("改短了", updated.note)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

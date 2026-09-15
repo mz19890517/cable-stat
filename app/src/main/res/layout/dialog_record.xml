@@ -95,7 +95,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="本根长度（毫米 mm）"
+            android:text="每根长度（毫米 mm，每行一根）"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="@color/text_secondary"
@@ -105,9 +105,10 @@
             android:id="@+id/et_length"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="例如截了一根 1850"
-            android:inputType="number"
-            android:digits="0123456789"
+            android:gravity="top|start"
+            android:minLines="3"
+            android:hint="每行填一根，例如：&#10;1850&#10;3200&#10;1500"
+            android:inputType="number|textMultiLine"
             android:importantForAutofill="no"
             android:layout_marginTop="8dp" />
 

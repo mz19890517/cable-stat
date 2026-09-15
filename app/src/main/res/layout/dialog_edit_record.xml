@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="18dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="单根长度（毫米 mm）"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_secondary" />
+
+    <EditText
+        android:id="@+id/et_edit_len"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="例如 1850"
+        android:inputType="number"
+        android:digits="0123456789"
+        android:importantForAutofill="no"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="备注（可空，修改后重新汇总）"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_secondary"
+        android:layout_marginTop="12dp" />
+
+    <EditText
+        android:id="@+id/et_edit_note"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="例如：出线到电抗器"
+        android:inputType="textMultiLine"
+        android:importantForAutofill="no"
+        android:layout_marginTop="6dp" />
+</LinearLayout>

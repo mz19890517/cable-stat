@@ -18,6 +18,7 @@ import com.cablestat.record.data.Repository
 import com.cablestat.record.data.db.Kind
 import com.cablestat.record.data.db.RecordEntity
 import com.cablestat.record.databinding.ActivityHistoryBinding
+import com.cablestat.record.databinding.DialogEditRecordBinding
 import com.cablestat.record.databinding.ItemHistoryBinding
 import com.cablestat.record.util.DT
 import com.cablestat.record.util.Fmt
@@ -82,6 +83,29 @@ class HistoryActivity : AppCompatActivity() {
         }
     }
 
+    private fun editRecord(r: RecordEntity) {
+        val vb = DialogEditRecordBinding.inflate(layoutInflater)
+        vb.etEditLen.setText(r.lengthMm.toString())
+        vb.etEditNote.setText(r.note)
+        AlertDialog.Builder(this)
+            .setTitle(if (r.kind == Kind.WIRE) "${wSpec(r.spec)} $r.color · 修改" else "$r.spec 铜排 · 修改")
+            .setView(vb.root)
+            .setPositiveButton("保存") { _, _ ->
+                val len = vb.etEditLen.text.toString().toLongOrNull() ?: 0L
+                if (len <= 0) {
+                    Toast.makeText(this, "长度需为大于 0 的数字（毫米）", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        repo.updateRecord(r.id, len, vb.etEditNote.text.toString())
+                    }
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
     private fun doExport(uri: android.net.Uri) {
         lifecycleScope.launch {
             val (project, rs) = withContext(Dispatchers.IO) {
@@ -118,6 +142,7 @@ class HistoryActivity : AppCompatActivity() {
                 vb.tvHistLen.text = Fmt.length(r.lengthMm)
                 vb.tvHistNote.text = r.note
                 vb.tvHistNote.visibility = if (r.note.isEmpty()) View.GONE else View.VISIBLE
+                vb.btnHistEdit.setOnClickListener { editRecord(r) }
                 vb.btnHistDelete.setOnClickListener {
                     AlertDialog.Builder(this@HistoryActivity)
                         .setTitle("删除该条记录")

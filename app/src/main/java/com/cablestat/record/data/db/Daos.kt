@@ -38,6 +38,9 @@ interface RecordDao {
     @Query("DELETE FROM records WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("UPDATE records SET lengthMm = :lengthMm, note = :note, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateLengthNote(id: String, lengthMm: Long, note: String, updatedAt: Long)
+
     @Query("SELECT * FROM records WHERE projectId = :projectId")
     fun observeByProject(projectId: String): LiveData<List<RecordEntity>>
 

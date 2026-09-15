@@ -141,9 +141,11 @@ class ProjectDetailActivity : AppCompatActivity() {
             presetKind = presetKind ?: currentKind,
             presetSpec = presetSpec,
             presetColor = presetColor
-        ) { kind, spec, color, lengthMm, note ->
+        ) { kind, spec, color, lengths, note ->
             lifecycleScope.launch {
-                withContext(Dispatchers.IO) { repo.addRecord(projectId, kind, spec, color, lengthMm, note) }
+                withContext(Dispatchers.IO) {
+                    repo.addRecords(projectId, kind, spec, color, lengths, note)
+                }
             }
         }
     }

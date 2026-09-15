@@ -18,8 +18,9 @@ import com.cablestat.record.util.WireColor
 import com.google.android.material.chip.Chip
 
 /**
- * 快速记一笔：截一根记一根。分类→规格→（线缆才需要）颜色→长度。
- * 同一 规格×颜色 自动累加，弹窗底部实时显示已有累计与本次后累计。
+ * 快速记一笔：分类→规格→（线缆才需要）颜色→长度。
+ * 长度框每行一根（可多行），每一根各记一条明细；同一 规格×颜色 自动累加，
+ * 弹窗底部实时显示已有累计与本次（多根合计）后累计。
  */
 object QuickRecordDialog {
 
@@ -33,7 +34,7 @@ object QuickRecordDialog {
         presetKind: String = Kind.WIRE,
         presetSpec: String? = null,
         presetColor: String? = null,
-        onSaved: (kind: String, spec: String, color: String, lengthMm: Long, note: String) -> Unit
+        onSaved: (kind: String, spec: String, color: String, lengths: List<Long>, note: String) -> Unit
     ) {
         val vb = DialogRecordBinding.inflate(LayoutInflater.from(context))
         var kind = if (presetKind == Kind.BUSBAR) Kind.BUSBAR else Kind.WIRE
@@ -77,11 +78,13 @@ object QuickRecordDialog {
                 vb.tvExistingTotal.visibility = View.GONE
             }
 
-            val input = vb.etLength.text.toString().toLongOrNull() ?: 0L
-            vb.tvLengthPreview.text = if (input > 0) {
-                "= ${Fmt.meterText(input)} 米，本次后累计 ${Fmt.length(existing + input)}"
+            val parsed = Repository.parseLengths(vb.etLength.text.toString())
+            val lengths = parsed.ok
+            val sum = lengths.sum()
+            if (sum > 0) {
+                vb.tvLengthPreview.text = "共 ${lengths.size} 根 · 本次计入 ${Fmt.length(sum)}，本次后累计 ${Fmt.length(existing + sum)}"
             } else {
-                "单位：毫米(mm)，1000mm = 1米"
+                vb.tvLengthPreview.text = "单位：毫米(mm)，1000mm = 1米。每行填一根，可一次填多根"
             }
         }
 
@@ -161,20 +164,21 @@ object QuickRecordDialog {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val spec = specOf()
             val color = colorOf()
-            val length = vb.etLength.text.toString().toLongOrNull() ?: 0L
+            val parsed = Repository.parseLengths(vb.etLength.text.toString())
             val invalid = when {
                 spec.isEmpty() -> "请选择或输入规格"
                 kind == Kind.WIRE && color.isEmpty() -> "请选择线缆颜色"
                 kind == Kind.WIRE && Repository.wireKey(spec) == Double.MAX_VALUE -> "线缆规格需为数字，如 1.5"
                 kind == Kind.BUSBAR && !Repository.isBusbarLike(spec) -> "铜排规格需含 ×，如 40×5"
-                length <= 0 -> "请输入本根长度（毫米），需大于 0"
+                parsed.ok.isEmpty() -> "请填写每根长度（毫米，每行一根），需大于 0"
+                parsed.invalid.isNotEmpty() -> "以下内容无法识别为长度：${parsed.invalid.joinToString("、")}"
                 else -> null
             }
             if (invalid != null) {
                 Toast.makeText(context, invalid, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            onSaved(kind, spec.trim(), if (kind == Kind.WIRE) color else "", length, vb.etNote.text.toString().trim())
+            onSaved(kind, spec.trim(), if (kind == Kind.WIRE) color else "", parsed.ok, vb.etNote.text.toString().trim())
             dialog.dismiss()
         }
     }

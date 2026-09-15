@@ -2,6 +2,7 @@ package com.cablestat.record.data
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
+import androidx.room.withTransaction
 import com.cablestat.record.data.db.AppDatabase
 import com.cablestat.record.data.db.ColorEntity
 import com.cablestat.record.data.db.Kind
@@ -40,6 +41,12 @@ data class ProjectStats(
 data class ProjectCard(
     val project: ProjectEntity,
     val stats: ProjectStats
+)
+
+/** 多行长度输入的解析结果：合法长度列表 + 无法识别片段 */
+data class LengthParse(
+    val ok: List<Long>,
+    val invalid: List<String>
 )
 
 class Repository(private val db: AppDatabase) {
@@ -99,6 +106,23 @@ class Repository(private val db: AppDatabase) {
         /** 判断规格是否为铜排样式 */
         fun isBusbarLike(spec: String): Boolean =
             spec.any { it == '×' || it == 'x' || it == 'X' || it == '*' }
+
+        /**
+         * 解析多行长度输入：每行一根长度（也兼容空格/逗号/分号分隔）。
+         * 分隔符：换行/空格/半全角逗号/分号；片段必须为纯数字且大于 0。
+         */
+        fun parseLengths(text: String): LengthParse {
+            val ok = mutableListOf<Long>()
+            val invalid = mutableListOf<String>()
+            val tokens = text.split(Regex("[,\\n，;；\\s]+"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            tokens.forEach { t ->
+                val v = t.toLongOrNull()
+                if (v != null && v > 0) ok.add(v) else invalid.add(t)
+            }
+            return LengthParse(ok, invalid)
+        }
     }
 
     // ---------- 项目 ----------
@@ -157,19 +181,35 @@ class Repository(private val db: AppDatabase) {
     // ---------- 记录 ----------
 
     suspend fun addRecord(projectId: String, kind: String, spec: String, color: String, lengthMm: Long, note: String) {
-        val now = System.currentTimeMillis()
         db.recordDao().insert(
-            RecordEntity(
-                id = UUID.randomUUID().toString(),
-                projectId = projectId,
-                kind = kind,
-                spec = spec.trim(),
-                color = color.trim(),
-                lengthMm = lengthMm,
-                note = note.trim(),
-                createdAt = now,
-                updatedAt = now
-            )
+            newRecord(projectId, kind, spec, color, lengthMm, note)
+        )
+    }
+
+    /** 批量记一笔：一次输入的每一行长度各记一条明细，同规格×颜色自动汇总 */
+    suspend fun addRecords(projectId: String, kind: String, spec: String, color: String, lengths: List<Long>, note: String) {
+        db.withTransaction {
+            lengths.forEach { db.recordDao().insert(newRecord(projectId, kind, spec, color, it, note)) }
+        }
+    }
+
+    /** 修改单根明细的长度与备注，汇总自动重算 */
+    suspend fun updateRecord(id: String, lengthMm: Long, note: String) {
+        db.recordDao().updateLengthNote(id, lengthMm, note.trim(), System.currentTimeMillis())
+    }
+
+    private fun newRecord(projectId: String, kind: String, spec: String, color: String, lengthMm: Long, note: String): RecordEntity {
+        val now = System.currentTimeMillis()
+        return RecordEntity(
+            id = UUID.randomUUID().toString(),
+            projectId = projectId,
+            kind = kind,
+            spec = spec.trim(),
+            color = color.trim(),
+            lengthMm = lengthMm,
+            note = note.trim(),
+            createdAt = now,
+            updatedAt = now
         )
     }
 
