@@ -1,0 +1,16 @@
+<resources>
+    <color name="primary">#1565C0</color>
+    <color name="primary_dark">#0D47A1</color>
+    <color name="accent">#FF8F00</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="bg_window">#F5F6F8</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="divider">#E0E0E0</color>
+    <color name="chip_bg">#E3F2FD</color>
+    <color name="chip_selected">#1565C0</color>
+    <color name="wire_color">#1565C0</color>
+    <color name="busbar_color">#B26A00</color>
+    <color name="red_warn">#D32F2F</color>
+    <color name="green_ok">#2E7D32</color>
+</resources>
