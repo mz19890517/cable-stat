@@ -34,7 +34,7 @@ class CandidateManagerActivity : AppCompatActivity() {
     private var colors: List<ColorEntity> = emptyList()
     private var busbarSpecs: List<SpecEntity> = emptyList()
 
-    private enum class Section { WIRE_SPEC, COLOR, BUSBAR_SPEC }
+    enum class Section { WIRE_SPEC, COLOR, BUSBAR_SPEC }
 
     sealed class Item {
         class Header(val section: Section) : Item()
