@@ -174,7 +174,7 @@ class ProjectDetailActivity : AppCompatActivity() {
 
     // ---------- 汇总列表适配器 ----------
 
-    private sealed class Item {
+    sealed class Item {
         class Group(val agg: SpecAgg, val expanded: Boolean, val isWire: Boolean) : Item()
         class Combo(val agg2: ComboAgg) : Item()
     }

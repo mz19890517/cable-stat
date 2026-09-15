@@ -36,7 +36,7 @@ class CandidateManagerActivity : AppCompatActivity() {
 
     private enum class Section { WIRE_SPEC, COLOR, BUSBAR_SPEC }
 
-    private sealed class Item {
+    sealed class Item {
         class Header(val section: Section) : Item()
         class SpecRow(val kind: String, val s: SpecEntity) : Item()
         class ColorRow(val c: ColorEntity) : Item()
