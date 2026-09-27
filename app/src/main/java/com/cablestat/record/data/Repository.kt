@@ -49,6 +49,13 @@ data class LengthParse(
     val invalid: List<String>
 )
 
+/** 多芯电缆规格解析结果：主芯数×单芯截面 + 附加芯数（如 3×2.5+1×1.5 → 主3芯2.5 + 附加1芯） */
+data class WireCoreInfo(
+    val mainCores: Int,
+    val mainArea: Double,
+    val extraCores: Int
+)
+
 class Repository(private val db: AppDatabase) {
 
     // ---------- 种子数据（首次启动写入候选池） ----------
@@ -60,6 +67,20 @@ class Repository(private val db: AppDatabase) {
         "150.0" to 150.0, "185.0" to 185.0, "240.0" to 240.0
     )
 
+    /** 多芯电缆常用规格（芯数×单芯截面，含 3+1/3+2/4+1 等带 N/PE 的规格） */
+    private val defaultWireMultiSpecs = listOf(
+        "2×1.5", "2×2.5", "2×4", "2×6", "2×10",
+        "3×1.5", "3×2.5", "3×4", "3×6", "3×10", "3×16", "3×25", "3×35", "3×50", "3×70", "3×95", "3×120",
+        "4×1.5", "4×2.5", "4×4", "4×6", "4×10", "4×16", "4×25", "4×35", "4×50", "4×70", "4×95",
+        "5×1.5", "5×2.5", "5×4", "5×6", "5×10", "5×16", "5×25",
+        "3×2.5+1×1.5", "3×4+1×2.5", "3×6+1×4", "3×10+1×6", "3×16+1×10", "3×25+1×16",
+        "3×35+1×16", "3×50+1×25", "3×70+1×35", "3×95+1×50",
+        "3×4+2×2.5", "3×6+2×4", "3×10+2×6", "3×16+2×10", "3×25+2×16", "3×35+2×16",
+        "3×50+2×25", "3×70+2×35",
+        "4×4+1×2.5", "4×6+1×4", "4×10+1×6", "4×16+1×10", "4×25+1×16", "4×35+1×16",
+        "4×50+1×25", "4×70+1×35", "4×95+1×50"
+    )
+
     private val defaultColors = listOf("红", "黄", "绿", "蓝", "黄绿", "黑", "棕", "白", "灰")
 
     private val defaultBusbarSpecs = listOf(
@@ -68,20 +89,27 @@ class Repository(private val db: AppDatabase) {
         "100×8", "100×10", "120×8", "120×10", "125×10"
     )
 
+    /**
+     * 幂等补齐内置候选池：只插入缺失项，已有的保留。
+     * 这样新增内置规格（如多芯电缆）在升级后也能补进老用户的候选池，且重复启动不会产生重复。
+     */
     suspend fun seedIfEmpty() {
-        if (db.specDao().listByKind(Kind.WIRE).isEmpty()) {
-            defaultWireSpecs.forEach { (label, key) ->
-                db.specDao().insert(SpecEntity(UUID.randomUUID().toString(), Kind.WIRE, label, key))
-            }
-        }
-        if (db.specDao().listByKind(Kind.BUSBAR).isEmpty()) {
-            defaultBusbarSpecs.forEach { label ->
-                db.specDao().insert(SpecEntity(UUID.randomUUID().toString(), Kind.BUSBAR, label, busbarKey(label)))
-            }
-        }
-        if (db.colorDao().listAll().isEmpty()) {
-            defaultColors.forEachIndexed { i, c ->
+        val wireItems = defaultWireSpecs + defaultWireMultiSpecs.map { it to wireKey(it) }
+        seedSpecs(Kind.WIRE, wireItems)
+        seedSpecs(Kind.BUSBAR, defaultBusbarSpecs.map { it to busbarKey(it) })
+        val existingColors = db.colorDao().listAll().map { it.label }.toSet()
+        defaultColors.forEachIndexed { i, c ->
+            if (c !in existingColors) {
                 db.colorDao().insert(ColorEntity(UUID.randomUUID().toString(), c, i))
+            }
+        }
+    }
+
+    private suspend fun seedSpecs(kind: String, items: List<Pair<String, Double>>) {
+        val existing = db.specDao().listByKind(kind).map { it.label }.toSet()
+        items.forEach { (label, key) ->
+            if (label !in existing) {
+                db.specDao().insert(SpecEntity(UUID.randomUUID().toString(), kind, label, key))
             }
         }
     }
@@ -100,8 +128,110 @@ class Repository(private val db: AppDatabase) {
             return Double.MAX_VALUE
         }
 
-        /** 线缆规格 "1.5" → 1.5，不可解析给极大值排末尾 */
-        fun wireKey(label: String): Double = label.trim().toDoubleOrNull() ?: Double.MAX_VALUE
+        // ---------- 线缆规格：单芯 / 多芯 ----------
+
+        /** 多芯排序基准：单芯截面最大 240，远小于该基准，保证多芯排在单芯之后 */
+        private const val MULTI_WIRE_ORDER_BASE = 100_000.0
+
+        /** 单芯分组键 */
+        const val WIRE_GROUP_SINGLE = "single"
+
+        private const val NUM_PAT = "\\d+(?:\\.\\d+)?"
+        private const val CORE_PAT = "$NUM_PAT\\s*[xX×*]\\s*$NUM_PAT"
+        private val MULTI_WIRE_REGEX = Regex("^$CORE_PAT(?:\\s*\\+\\s*$CORE_PAT)*$")
+        private val CORE_SPLIT = Regex("\\s*\\+\\s*")
+        private val CORE_PARTS = Regex("^($NUM_PAT)\\s*[xX×*]\\s*($NUM_PAT)$")
+        private val GROUP_KEY_REGEX = Regex("^core(\\d+)(?:plus(\\d+))?$")
+
+        /** 线缆规格 "1.5" → 1.5；多芯 "3×2.5" 按 芯数→截面 排序；不可解析给极大值排末尾 */
+        fun wireKey(label: String): Double {
+            val t = label.trim()
+            t.toDoubleOrNull()?.let { return it }
+            val info = parseWireCoreInfo(t) ?: return Double.MAX_VALUE
+            val cores = info.mainCores + info.extraCores
+            return MULTI_WIRE_ORDER_BASE + cores * 1000.0 + info.mainArea
+        }
+
+        /** 解析多芯电缆规格：如 "3×2.5"、"4×4+1×2.5"；非多芯返回 null */
+        fun parseWireCoreInfo(spec: String): WireCoreInfo? {
+            val t = spec.trim()
+            if (!MULTI_WIRE_REGEX.matches(t)) return null
+            val parts = CORE_SPLIT.split(t)
+            val first = CORE_PARTS.matchEntire(parts[0]) ?: return null
+            val mainCores = first.groupValues[1].toDoubleOrNull()?.toInt() ?: return null
+            val mainArea = first.groupValues[2].toDoubleOrNull() ?: return null
+            var extra = 0
+            for (i in 1 until parts.size) {
+                val m = CORE_PARTS.matchEntire(parts[i]) ?: return null
+                extra += m.groupValues[1].toDoubleOrNull()?.toInt() ?: return null
+            }
+            return WireCoreInfo(mainCores, mainArea, extra)
+        }
+
+        /** 是否为多芯电缆规格（芯数×截面，可带 +N×S） */
+        fun isMultiCoreSpec(spec: String): Boolean = parseWireCoreInfo(spec) != null
+
+        /** 是否可作为线缆规格：单芯数字或多芯样式，且数值大于 0 */
+        fun isValidWireSpec(spec: String): Boolean {
+            val t = spec.trim()
+            val v = t.toDoubleOrNull()
+            if (v != null) return v > 0
+            val info = parseWireCoreInfo(t) ?: return false
+            return info.mainCores > 0 && info.mainArea > 0 && info.extraCores >= 0
+        }
+
+        /** 线缆规格归一：去空白，把 x、X、星号分隔符统一为 ×，单芯尾零归一（4.0 → 4） */
+        fun normalizeWireSpec(label: String): String {
+            val t = label.trim().replace(Regex("\\s+"), "")
+            if (t.isEmpty()) return t
+            if (parseWireCoreInfo(t) != null) {
+                return t.replace('x', '×').replace('X', '×').replace('*', '×')
+            }
+            val v = t.toDoubleOrNull()
+            if (v != null && !v.isInfinite() && v == Math.floor(v)) return v.toLong().toString()
+            return t
+        }
+
+        /** 线缆分组键：单芯 = "single"；"3×2.5" = "core3"；"3×2.5+1×1.5" = "core3plus1" */
+        fun wireGroupKey(spec: String): String {
+            val info = parseWireCoreInfo(spec) ?: return WIRE_GROUP_SINGLE
+            return if (info.extraCores == 0) "core${info.mainCores}" else "core${info.mainCores}plus${info.extraCores}"
+        }
+
+        /** 线缆分组显示名 */
+        fun wireGroupTitle(key: String): String {
+            if (key == WIRE_GROUP_SINGLE) return "单芯"
+            val m = GROUP_KEY_REGEX.matchEntire(key) ?: return "其他"
+            val main = m.groupValues[1]
+            val extra = m.groupValues[2]
+            return if (extra.isEmpty()) "${main}芯" else "${main}+${extra}芯"
+        }
+
+        /** 线缆分组排序：单芯 → 芯数由少到多，N芯 排在 N+P 之前 */
+        fun wireGroupRank(key: String): Double {
+            if (key == WIRE_GROUP_SINGLE) return 0.0
+            val m = GROUP_KEY_REGEX.matchEntire(key) ?: return Double.MAX_VALUE
+            val main = m.groupValues[1].toDoubleOrNull() ?: return Double.MAX_VALUE
+            val extra = m.groupValues[2].toDoubleOrNull() ?: 0.0
+            return main * 100 + if (extra > 0) 50 + extra else 0.0
+        }
+
+        /** 给定规格标签列表，返回存在分组的 (键, 显示名)，按芯数排序 */
+        fun wireGroupOrder(labels: List<String>): List<Pair<String, String>> =
+            labels.map { wireGroupKey(it) }.distinct()
+                .sortedBy { wireGroupRank(it) }
+                .map { it to wireGroupTitle(it) }
+
+        /** 线缆规格展示："1.5" → "1.5mm²"，"3×2.5" → "3×2.5mm²" */
+        fun wireSpecLabel(spec: String): String {
+            val t = spec.trim()
+            val v = t.toDoubleOrNull()
+            if (v != null) {
+                val n = if (!v.isInfinite() && v == Math.floor(v)) v.toLong().toString() else v.toString()
+                return "${n}mm²"
+            }
+            return "${t}mm²"
+        }
 
         /** 判断规格是否为铜排样式 */
         fun isBusbarLike(spec: String): Boolean =
@@ -300,13 +430,13 @@ class Repository(private val db: AppDatabase) {
                         }
                     )
                 }
-                .sortedWith(compareBy<SpecAgg> { orderOf(specOrder, it.spec) }.thenBy { it.spec })
+                .sortedWith(compareBy<SpecAgg> { orderOf(kind, specOrder, it.spec) }.thenBy { it.spec })
         }
         return group(Kind.WIRE, wireOrder) to group(Kind.BUSBAR, busOrder)
     }
 
-    private fun orderOf(order: Map<String, Double>, spec: String): Double =
-        order[spec] ?: if (isBusbarLike(spec)) busbarKey(spec) else wireKey(spec)
+    private fun orderOf(kind: String, order: Map<String, Double>, spec: String): Double =
+        order[spec] ?: if (kind == Kind.BUSBAR) busbarKey(spec) else wireKey(spec)
 
     // ---------- 候选池 ----------
 
@@ -315,15 +445,9 @@ class Repository(private val db: AppDatabase) {
     fun observeColors(): LiveData<List<ColorEntity>> = db.colorDao().observeAll()
 
     suspend fun addSpec(kind: String, label: String) {
-        val normalized = if (kind == Kind.WIRE) normalizeWireLabel(label) else label.trim()
-        val key = if (kind == Kind.BUSBAR) busbarKey(label) else wireKey(label)
+        val normalized = if (kind == Kind.WIRE) normalizeWireSpec(label) else label.trim()
+        val key = if (kind == Kind.BUSBAR) busbarKey(normalized) else wireKey(normalized)
         db.specDao().insert(SpecEntity(UUID.randomUUID().toString(), kind, normalized, key))
-    }
-
-    /** 线缆规格尾零归一：4.0 → 4，4.00 → 4，避免与内置候选重复 */
-    private fun normalizeWireLabel(label: String): String {
-        val v = label.trim().toDoubleOrNull()
-        return if (v != null && v == Math.floor(v)) v.toLong().toString() else label.trim()
     }
 
     suspend fun deleteSpec(id: String) = db.specDao().deleteById(id)

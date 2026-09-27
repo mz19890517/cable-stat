@@ -40,10 +40,21 @@ class SeedTest {
     fun seedsWireSpecsColorsBusbarSpecs() = runTest {
         repo.seedIfEmpty()
         val wire = repo.wireSpecs()
-        assertEquals(16, wire.size)
+        // 单芯 16 档 + 多芯常用规格
+        assertTrue(wire.size >= 70)
         assertEquals("1.0", wire.first().label)
         assertTrue(wire.any { it.label == "240.0" })
+        // 多芯内置规格（纯多芯 + 带 N/PE）
+        assertTrue(wire.any { it.label == "3×2.5" })
+        assertTrue(wire.any { it.label == "4×4" })
+        assertTrue(wire.any { it.label == "3×2.5+1×1.5" })
         assertTrue(wire.zipWithNext().all { (a, b) -> a.sortKey <= b.sortKey })
+
+        // 单芯全部排在多芯之前
+        val firstMulti = wire.indexOfFirst { Repository.isMultiCoreSpec(it.label) }
+        assertTrue(firstMulti in 1 until wire.size)
+        assertTrue(wire.take(firstMulti).none { Repository.isMultiCoreSpec(it.label) })
+        assertTrue(wire.drop(firstMulti).all { Repository.isMultiCoreSpec(it.label) })
 
         val bus = repo.busbarSpecs()
         assertTrue(bus.any { it.label == "40×5" })
@@ -57,9 +68,21 @@ class SeedTest {
     @Test
     fun seedIsIdempotent() = runTest {
         repo.seedIfEmpty()
+        val wireCount = repo.wireSpecs().size
+        val busCount = repo.busbarSpecs().size
         repo.seedIfEmpty()
-        assertEquals(16, repo.wireSpecs().size)
+        assertEquals(wireCount, repo.wireSpecs().size)
+        assertEquals(busCount, repo.busbarSpecs().size)
         assertEquals(9, repo.colors().size)
+    }
+
+    @Test
+    fun seedBackfillsMissingSpecsForExistingInstall() = runTest {
+        // 模拟老用户：候选池里只有单芯，升级后应补齐多芯
+        repo.addSpec(Kind.WIRE, "1.5")
+        repo.seedIfEmpty()
+        assertTrue(repo.wireSpecs().any { it.label == "3×2.5" })
+        assertEquals(1, repo.wireSpecs().count { it.label == "1.5" })
     }
 }
 
@@ -158,6 +181,19 @@ class AggregateTest {
         assertEquals(600L, s.busbarMm)
         assertEquals(2L, s.recordCount)
     }
+
+    @Test
+    fun multiCoreWireSortsByCoresNotBusbarArea() {
+        val records = listOf(
+            rec("3×2.5", "红", 1),
+            rec("1.5", "红", 1),
+            rec("2×2.5", "红", 1),
+            rec("3×2.5+1×1.5", "红", 1)
+        )
+        val (wire, _) = repo.buildAggregation(records, listOf("红"), emptyMap(), emptyMap())
+        assertEquals(listOf("1.5", "2×2.5", "3×2.5", "3×2.5+1×1.5"), wire.map { it.spec })
+    }
+
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -173,6 +209,49 @@ class SpecParseTest {
         assertEquals(Double.MAX_VALUE, Repository.wireKey("abc"), 0.0)
         assertTrue(Repository.isBusbarLike("40×5"))
         assertTrue(!Repository.isBusbarLike("1.5"))
+    }
+
+    @Test
+    fun validatesSingleAndMultiCoreWireSpecs() {
+        assertTrue(Repository.isValidWireSpec("1.5"))
+        assertTrue(Repository.isValidWireSpec("3×2.5"))
+        assertTrue(Repository.isValidWireSpec("3x2.5"))
+        assertTrue(Repository.isValidWireSpec("4×4+1×2.5"))
+        assertTrue(Repository.isValidWireSpec("3×2.5+2×1.5"))
+        assertTrue(!Repository.isValidWireSpec("0"))
+        assertTrue(!Repository.isValidWireSpec("-1.5"))
+        assertTrue(!Repository.isValidWireSpec("abc"))
+        assertTrue(!Repository.isValidWireSpec("3×"))
+        assertTrue(!Repository.isValidWireSpec("3×2.5+"))
+    }
+
+    @Test
+    fun normalizesWireSpecs() {
+        assertEquals("4", Repository.normalizeWireSpec("4.0"))
+        assertEquals("1.5", Repository.normalizeWireSpec(" 1.5 "))
+        assertEquals("3×2.5", Repository.normalizeWireSpec("3x2.5"))
+        assertEquals("3×2.5", Repository.normalizeWireSpec("3 * 2.5"))
+        assertEquals("3×2.5+1×1.5", Repository.normalizeWireSpec("3 × 2.5 + 1 x 1.5"))
+    }
+
+    @Test
+    fun groupsWireSpecsByCoreCount() {
+        assertEquals(Repository.WIRE_GROUP_SINGLE, Repository.wireGroupKey("1.5"))
+        assertEquals("core3", Repository.wireGroupKey("3×2.5"))
+        assertEquals("core3plus1", Repository.wireGroupKey("3×2.5+1×1.5"))
+        assertEquals("单芯", Repository.wireGroupTitle(Repository.WIRE_GROUP_SINGLE))
+        assertEquals("3芯", Repository.wireGroupTitle("core3"))
+        assertEquals("3+1芯", Repository.wireGroupTitle("core3plus1"))
+        val order = Repository.wireGroupOrder(listOf("1.5", "3×2.5", "2×2.5", "3×2.5+1×1.5", "3×4"))
+            .map { it.first }
+        assertEquals(listOf("single", "core2", "core3", "core3plus1"), order)
+    }
+
+    @Test
+    fun wireSpecLabelShowsAreaForMultiCore() {
+        assertEquals("1.5mm²", Repository.wireSpecLabel("1.5"))
+        assertEquals("4mm²", Repository.wireSpecLabel("4.0"))
+        assertEquals("3×2.5mm²", Repository.wireSpecLabel("3×2.5"))
     }
 
     @Test

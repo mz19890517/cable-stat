@@ -37,7 +37,7 @@ class CandidateManagerActivity : AppCompatActivity() {
     enum class Section { WIRE_SPEC, COLOR, BUSBAR_SPEC }
 
     sealed class Item {
-        class Header(val section: Section) : Item()
+        class Header(val title: String) : Item()
         class SpecRow(val kind: String, val s: SpecEntity) : Item()
         class ColorRow(val c: ColorEntity) : Item()
     }
@@ -72,15 +72,19 @@ class CandidateManagerActivity : AppCompatActivity() {
     private fun rebuild() {
         val items = mutableListOf<Item>()
         if (wireSpecs.isNotEmpty()) {
-            items.add(Item.Header(Section.WIRE_SPEC))
-            wireSpecs.forEach { items.add(Item.SpecRow(Kind.WIRE, it)) }
+            // 线缆规格按芯数分组展示（单芯/2芯/3芯/3+1…），规格多时便于查找
+            Repository.wireGroupOrder(wireSpecs.map { it.label }).forEach { (key, title) ->
+                items.add(Item.Header("线缆规格 · $title（mm²）"))
+                wireSpecs.filter { Repository.wireGroupKey(it.label) == key }
+                    .forEach { items.add(Item.SpecRow(Kind.WIRE, it)) }
+            }
         }
         if (colors.isNotEmpty()) {
-            items.add(Item.Header(Section.COLOR))
+            items.add(Item.Header("线缆颜色"))
             colors.forEach { items.add(Item.ColorRow(it)) }
         }
         if (busbarSpecs.isNotEmpty()) {
-            items.add(Item.Header(Section.BUSBAR_SPEC))
+            items.add(Item.Header("铜排规格（宽×厚）"))
             busbarSpecs.forEach { items.add(Item.SpecRow(Kind.BUSBAR, it)) }
         }
         adapter.submit(items)
@@ -89,7 +93,7 @@ class CandidateManagerActivity : AppCompatActivity() {
     private fun addDialog(section: Section) {
         val input = EditText(this).apply {
             hint = when (section) {
-                Section.WIRE_SPEC -> "数字，如 120"
+                Section.WIRE_SPEC -> "单芯 120，或多芯 3×2.5 / 3×2.5+1×1.5"
                 Section.COLOR -> "颜色名，如 紫"
                 Section.BUSBAR_SPEC -> "宽×厚，如 40×5"
             }
@@ -108,7 +112,7 @@ class CandidateManagerActivity : AppCompatActivity() {
                     Section.COLOR -> if (label.isEmpty()) "颜色名不能为空" else null
                     Section.WIRE_SPEC -> when {
                         label.isEmpty() -> "请输入规格"
-                        Repository.wireKey(label) == Double.MAX_VALUE -> "线缆规格需为数字，如 1.5"
+                        !Repository.isValidWireSpec(label) -> "线缆规格需为数字（如 1.5）或多芯（如 3×2.5）"
                         else -> null
                     }
                     Section.BUSBAR_SPEC -> when {
@@ -186,11 +190,7 @@ class CandidateManagerActivity : AppCompatActivity() {
 
         inner class HeaderVH(private val vb: ItemSectionHeaderBinding) : RecyclerView.ViewHolder(vb.root) {
             fun bind(item: Item.Header) {
-                vb.root.text = when (item.section) {
-                    Section.WIRE_SPEC -> "线缆规格（mm²）"
-                    Section.COLOR -> "线缆颜色"
-                    Section.BUSBAR_SPEC -> "铜排规格（宽×厚）"
-                }
+                vb.root.text = item.title
             }
         }
 

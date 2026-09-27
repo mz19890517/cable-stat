@@ -58,13 +58,15 @@ object QuickRecordDialog {
         val targetSpec = presetSpec ?: ""
         val targetColor = presetColor ?: ""
         val staged = mutableListOf<Staged>()
+        // 线缆规格分组（单芯/3芯/3+1…），铜排为 null
+        var specGroupKey: String? = null
 
         // ---------- 辅助：当前选中的规格/颜色/校验 ----------
 
         fun specOf(): String {
             if (appendMode) return targetSpec
             val custom = vb.etSpecCustom.text.toString().trim()
-            if (custom.isNotEmpty()) return custom
+            if (custom.isNotEmpty()) return if (kind == Kind.WIRE) Repository.normalizeWireSpec(custom) else custom
             val sel = vb.cgSpec.checkedChipId
             if (sel == -1) return ""
             val text = vb.cgSpec.findViewById<Chip>(sel)?.text?.toString() ?: return ""
@@ -100,7 +102,7 @@ object QuickRecordDialog {
                 appendMode -> null
                 spec.isEmpty() -> "请选择或输入规格"
                 kind == Kind.WIRE && color.isEmpty() -> "请选择线缆颜色"
-                kind == Kind.WIRE && Repository.wireKey(spec) == Double.MAX_VALUE -> "线缆规格需为数字，如 1.5"
+                kind == Kind.WIRE && !Repository.isValidWireSpec(spec) -> "线缆规格需为数字（如 1.5）或多芯（如 3×2.5）"
                 kind == Kind.BUSBAR && !Repository.isBusbarLike(spec) -> "铜排规格需含 ×，如 40×5"
                 parsed.ok.isEmpty() -> "请填写每根长度（单位 ${unit.label}，每行一根），需大于 0"
                 parsed.invalid.isNotEmpty() -> "以下内容无法识别为长度：${parsed.invalid.joinToString("、")}"
@@ -160,7 +162,8 @@ object QuickRecordDialog {
 
         fun rebuildSpecChips(selectSpec: String? = presetSpec) {
             vb.cgSpec.removeAllViews()
-            val list = if (kind == Kind.BUSBAR) busbarSpecs else wireSpecs
+            val list = if (kind == Kind.BUSBAR) busbarSpecs
+            else wireSpecs.filter { specGroupKey == null || Repository.wireGroupKey(it.label) == specGroupKey }
             list.forEach { s ->
                 val chip = Chip(context).apply {
                     text = if (kind == Kind.BUSBAR) s.label else specLabel(s.label)
@@ -188,6 +191,50 @@ object QuickRecordDialog {
             }
             refreshTotals()
         }
+
+        /** 构建线缆分组 chips（单芯/2芯/3芯/3+1…），铜排时隐藏 */
+        fun rebuildSpecGroups(selectSpec: String?) {
+            vb.cgSpecGroup.removeAllViews()
+            if (kind != Kind.WIRE) {
+                vb.cgSpecGroup.visibility = View.GONE
+                return
+            }
+            vb.cgSpecGroup.visibility = View.VISIBLE
+            val groups = Repository.wireGroupOrder(wireSpecs.map { it.label })
+            if (selectSpec != null) specGroupKey = Repository.wireGroupKey(selectSpec)
+            if (specGroupKey == null || groups.none { it.first == specGroupKey }) {
+                specGroupKey = groups.firstOrNull()?.first
+            }
+            groups.forEach { (key, title) ->
+                val chip = Chip(context).apply {
+                    text = title
+                    isCheckable = true
+                    isCheckedIconVisible = false
+                    textSize = 13f
+                    chipStrokeWidth = 2f
+                    chipStrokeColor = selectedStroke(context.getColor(R.color.primary))
+                }
+                chip.isChecked = key == specGroupKey
+                chip.setOnClickListener {
+                    specGroupKey = key
+                    rebuildSpecChips(null)
+                }
+                vb.cgSpecGroup.addView(chip)
+            }
+        }
+
+        /** 重建规格区：先定分组，再按分组展示规格 */
+        fun rebuildSpecSection(selectSpec: String? = presetSpec) {
+            if (kind == Kind.WIRE) {
+                rebuildSpecGroups(selectSpec)
+            } else {
+                vb.cgSpecGroup.removeAllViews()
+                vb.cgSpecGroup.visibility = View.GONE
+                specGroupKey = null
+            }
+            rebuildSpecChips(selectSpec)
+        }
+
 
         fun rebuildColorChips(selectColor: String? = presetColor) {
             vb.cgColor.removeAllViews()
@@ -228,7 +275,7 @@ object QuickRecordDialog {
             if (!appendMode) {
                 vb.chipKindWire.isChecked = s.kind == Kind.WIRE
                 vb.chipKindBusbar.isChecked = s.kind == Kind.BUSBAR
-                rebuildSpecChips(s.spec)
+                rebuildSpecSection(s.spec)
                 rebuildColorChips(s.color)
             }
             vb.etLength.setText(s.lengths.joinToString("\n") { (it / unit.toMm).toString() })
@@ -271,29 +318,32 @@ object QuickRecordDialog {
             vb.cgKind.visibility = View.GONE
             vb.tvSpecLabel.visibility = View.GONE
             vb.cgSpec.visibility = View.GONE
+            vb.cgSpecGroup.visibility = View.GONE
             vb.etSpecCustom.visibility = View.GONE
             vb.tvColorLabel.visibility = View.GONE
             vb.cgColor.visibility = View.GONE
         } else {
             vb.chipKindWire.isChecked = kind == Kind.WIRE
             vb.chipKindBusbar.isChecked = kind == Kind.BUSBAR
-            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²）"
+            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²，可按芯数分组）"
         }
 
         vb.tvLenLabel.text = "每根长度（${unit.label} ${unit.code}，每行一根，可用 85×5 表示 5 根）"
         vb.etLength.hint = "每行填一根（单位 ${unit.label}，可一次多行），例如：\n85\n32×5（=5根32）"
 
         vb.cgKind.setOnCheckedStateChangeListener { _, _ ->
-            kind = if (vb.chipKindBusbar.isChecked) Kind.BUSBAR else Kind.WIRE
-            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²）"
-            rebuildSpecChips()
+            val newKind = if (vb.chipKindBusbar.isChecked) Kind.BUSBAR else Kind.WIRE
+            if (newKind != kind) specGroupKey = null
+            kind = newKind
+            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²，可按芯数分组）"
+            rebuildSpecSection()
             rebuildColorChips()
         }
         vb.etSpecCustom.addTextChangedListener(textWatcher { refreshTotals() })
         vb.etLength.addTextChangedListener(textWatcher { refreshTotals() })
 
         if (!appendMode) {
-            rebuildSpecChips()
+            rebuildSpecSection()
             rebuildColorChips()
         }
         refreshTotals()

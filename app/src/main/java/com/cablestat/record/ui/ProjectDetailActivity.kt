@@ -223,7 +223,7 @@ class ProjectDetailActivity : AppCompatActivity() {
                 vb.tvKindBadge.text = if (g.kind == Kind.WIRE) "线" else "铜"
                 vb.tvKindBadge.background = if (g.kind == Kind.WIRE)
                     getDrawable(R.drawable.pill_wire) else getDrawable(R.drawable.pill_busbar)
-                vb.tvGroupSpec.text = if (g.kind == Kind.WIRE) "${wSpec(g.spec)}" else g.spec
+                vb.tvGroupSpec.text = if (g.kind == Kind.WIRE) Repository.wireSpecLabel(g.spec) else g.spec
                 vb.tvGroupTotal.text = Fmt.length(g.totalMm)
                 vb.tvGroupCount.text = "共 ${g.count} 根/条"
                 vb.ivGroupExpand.visibility = if (g.kind == Kind.WIRE) View.VISIBLE else View.INVISIBLE
@@ -275,11 +275,4 @@ class ProjectDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun wSpec(spec: String): String {
-        val v = spec.toDoubleOrNull()
-        return if (v != null) {
-            val n = if (v == Math.floor(v)) v.toLong().toString() else v.toString()
-            "${n}mm²"
-        } else spec
-    }
 }

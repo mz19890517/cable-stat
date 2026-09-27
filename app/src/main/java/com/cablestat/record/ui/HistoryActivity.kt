@@ -59,7 +59,7 @@ class HistoryActivity : AppCompatActivity() {
 
         val title = when {
             filterSpec.isEmpty() -> "$projectName · 全部明细"
-            filterKind == Kind.WIRE -> "${wSpec(filterSpec)} ${filterColor} · 明细"
+            filterKind == Kind.WIRE -> "${Repository.wireSpecLabel(filterSpec)} ${filterColor} · 明细"
             else -> "$filterSpec 铜排 · 明细"
         }
         binding.tvTitle.text = title
@@ -88,7 +88,7 @@ class HistoryActivity : AppCompatActivity() {
         vb.etEditLen.setText(r.lengthMm.toString())
         vb.etEditNote.setText(r.note)
         AlertDialog.Builder(this)
-            .setTitle(if (r.kind == Kind.WIRE) "${wSpec(r.spec)} ${r.color} · 修改" else "${r.spec} 铜排 · 修改")
+            .setTitle(if (r.kind == Kind.WIRE) "${Repository.wireSpecLabel(r.spec)} ${r.color} · 修改" else "${r.spec} 铜排 · 修改")
             .setView(vb.root)
             .setPositiveButton("保存") { _, _ ->
                 val len = vb.etEditLen.text.toString().toLongOrNull() ?: 0L
@@ -138,7 +138,7 @@ class HistoryActivity : AppCompatActivity() {
         inner class VH(private val vb: ItemHistoryBinding) : RecyclerView.ViewHolder(vb.root) {
             fun bind(r: RecordEntity) {
                 vb.tvHistTime.text = DT.dateTimeSec(r.createdAt)
-                vb.tvHistSpec.text = if (r.kind == Kind.WIRE) wSpec(r.spec) + (if (r.color.isNotEmpty()) " ${r.color}" else "") else r.spec
+                vb.tvHistSpec.text = if (r.kind == Kind.WIRE) Repository.wireSpecLabel(r.spec) + (if (r.color.isNotEmpty()) " ${r.color}" else "") else r.spec
                 vb.tvHistLen.text = Fmt.length(r.lengthMm)
                 vb.tvHistNote.text = r.note
                 vb.tvHistNote.visibility = if (r.note.isEmpty()) View.GONE else View.VISIBLE
@@ -159,11 +159,4 @@ class HistoryActivity : AppCompatActivity() {
         }
     }
 
-    private fun wSpec(spec: String): String {
-        val v = spec.toDoubleOrNull()
-        return if (v != null) {
-            val n = if (v == Math.floor(v)) v.toLong().toString() else v.toString()
-            "${n}mm²"
-        } else spec
-    }
 }

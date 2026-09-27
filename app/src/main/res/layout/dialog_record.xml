@@ -64,10 +64,21 @@
             android:layout_marginTop="16dp" />
 
         <com.google.android.material.chip.ChipGroup
-            android:id="@+id/cg_spec"
+            android:id="@+id/cg_spec_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
+
+            <!-- 线缆规格分组 chips（单芯/2芯/3芯/3+1…）动态填充 -->
+        </com.google.android.material.chip.ChipGroup>
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/cg_spec"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             app:singleSelection="true">
 
             <!-- 规格 chips 动态填充 -->

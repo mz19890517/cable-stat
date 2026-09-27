@@ -86,6 +86,8 @@ dependencies {
     // 回归测试（Robolectric 本地 JVM；CI 跑 testDebugUnitTest）
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
+    // Robolectric 传递依赖的 conscrypt 2.5.2 不含 aarch64 原生库；显式升到 2.7.0 以支持本机(arm64)跑单测，x86_64 同样包含
+    testImplementation("org.conscrypt:conscrypt-openjdk-uber:2.7.0")
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }
