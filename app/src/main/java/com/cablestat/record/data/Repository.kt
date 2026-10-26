@@ -304,8 +304,8 @@ class Repository(private val db: AppDatabase) {
                 return true
             }
             val v = ExprParser(t).evaluate() ?: return false
-            val rounded = Math.round(v)
-            if (rounded <= 0 || rounded > MAX_LENGTH_VALUE.toLong()) return false
+            // 单位空间只校验 正值/上限；毫米取整是否为 0 由调用方判断（0.2833米=283mm 合法，0.2833毫米=0 应报错）
+            if (v <= 0.0 || v > MAX_LENGTH_VALUE) return false
             out.add(v)
             return true
         }
