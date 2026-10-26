@@ -63,36 +63,37 @@
             android:textColor="@color/text_secondary"
             android:layout_marginTop="16dp" />
 
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/cg_spec_group"
+        <!-- 紧凑规格选择器：一行显示当前规格，点击弹出二级选择（分组→规格/手动输入） -->
+        <LinearLayout
+            android:id="@+id/ll_spec_selector"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            app:singleSelection="true"
-            app:selectionRequired="true">
+            android:background="@drawable/bg_input"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:minHeight="48dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
 
-            <!-- 线缆规格分组 chips（单芯/2芯/3芯/3+1…）动态填充 -->
-        </com.google.android.material.chip.ChipGroup>
+            <TextView
+                android:id="@+id/tv_spec_value"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="点击选择规格"
+                android:textColor="@color/primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/cg_spec"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            app:singleSelection="true">
-
-            <!-- 规格 chips 动态填充 -->
-        </com.google.android.material.chip.ChipGroup>
-
-        <EditText
-            android:id="@+id/et_spec_custom"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="或手动输入规格（铜排如 40×5）"
-            android:inputType="text"
-            android:importantForAutofill="no"
-            android:layout_marginTop="8dp"
-            android:visibility="visible" />
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="展开规格选择"
+                android:src="@drawable/ic_expand"
+                app:tint="@color/text_secondary" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_color_label"

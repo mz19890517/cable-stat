@@ -16,6 +16,7 @@ import com.cablestat.record.data.db.Kind
 import com.cablestat.record.data.db.RecordEntity
 import com.cablestat.record.data.db.SpecEntity
 import com.cablestat.record.databinding.DialogRecordBinding
+import com.cablestat.record.databinding.DialogSpecPickerBinding
 import com.cablestat.record.databinding.ItemStagedBinding
 import com.cablestat.record.util.LengthUnit
 import com.cablestat.record.util.WireColor
@@ -58,20 +59,12 @@ object QuickRecordDialog {
         val targetSpec = presetSpec ?: ""
         val targetColor = presetColor ?: ""
         val staged = mutableListOf<Staged>()
-        // 线缆规格分组（单芯/3芯/3+1…），铜排为 null
-        var specGroupKey: String? = null
+        // 当前选中规格（弹层里点选或手动输入确认后写入；手动输入框只在弹层内）
+        var selectedSpec = targetSpec
 
         // ---------- 辅助：当前选中的规格/颜色/校验 ----------
 
-        fun specOf(): String {
-            if (appendMode) return targetSpec
-            val custom = vb.etSpecCustom.text.toString().trim()
-            if (custom.isNotEmpty()) return if (kind == Kind.WIRE) Repository.normalizeWireSpec(custom) else custom
-            val sel = vb.cgSpec.checkedChipId
-            if (sel == -1) return ""
-            val text = vb.cgSpec.findViewById<Chip>(sel)?.text?.toString() ?: return ""
-            return if (kind == Kind.WIRE) text.removeSuffix("mm²").trim() else text.trim()
-        }
+        fun specOf(): String = if (appendMode) targetSpec else selectedSpec.trim()
 
         fun colorOf(): String {
             if (appendMode) return targetColor
@@ -98,6 +91,7 @@ object QuickRecordDialog {
             val spec = specOf()
             val color = colorOf()
             val parsed = Repository.parseLengths(vb.etLength.text.toString())
+            val lengths = parsed.ok.map { Math.round(it * unit.toMm) }
             val invalid = when {
                 appendMode -> null
                 spec.isEmpty() -> "请选择或输入规格"
@@ -105,6 +99,7 @@ object QuickRecordDialog {
                 kind == Kind.WIRE && !Repository.isValidWireSpec(spec) -> "线缆规格需为数字（如 1.5）或多芯（如 3×2.5）"
                 kind == Kind.BUSBAR && !Repository.isBusbarLike(spec) -> "铜排规格需含 ×，如 40×5"
                 parsed.ok.isEmpty() -> "请填写每根长度（单位 ${unit.label}，每行一根），需大于 0"
+                lengths.any { it <= 0L } -> "有长度换算后不足 1 毫米，请检查算式"
                 parsed.invalid.isNotEmpty() -> "以下内容无法识别为长度：${parsed.invalid.joinToString("、")}"
                 else -> null
             }
@@ -116,7 +111,7 @@ object QuickRecordDialog {
                 kind = kind,
                 spec = spec.trim(),
                 color = if (kind == Kind.WIRE) color else "",
-                lengths = parsed.ok.map { it * unit.toMm },
+                lengths = lengths,
                 note = vb.etNote.text.toString().trim()
             )
         }
@@ -146,11 +141,12 @@ object QuickRecordDialog {
             val lengths = parsed.ok
             val sum = lengths.sum()
             if (sum > 0) {
+                val sumMm = Math.round(sum * unit.toMm)
                 vb.tvLengthPreview.text =
-                    "共 ${lengths.size} 根 · 本次 ${unitText(sum * unit.toMm)}，本次后累计 ${unitText(existing + sum * unit.toMm)}"
+                    "共 ${lengths.size} 根 · 本次 ${unitText(sumMm)}，本次后累计 ${unitText(existing + sumMm)}"
             } else {
                 vb.tvLengthPreview.text =
-                    "单位：${unit.label}。每行一根，可一次多行；同一长度多根写 85×5（5根各85）"
+                    "单位：${unit.label}。每行一根，可一次多行；85×5 表示 5 根各85；支持 +−×÷ 与括号（先乘除后加减）"
             }
         }
 
@@ -160,81 +156,125 @@ object QuickRecordDialog {
             intArrayOf(checkedColor, Color.TRANSPARENT)
         )
 
-        fun rebuildSpecChips(selectSpec: String? = presetSpec) {
-            vb.cgSpec.removeAllViews()
-            val list = if (kind == Kind.BUSBAR) busbarSpecs
-            else wireSpecs.filter { specGroupKey == null || Repository.wireGroupKey(it.label) == specGroupKey }
-            list.forEach { s ->
-                val chip = Chip(context).apply {
-                    text = if (kind == Kind.BUSBAR) s.label else specLabel(s.label)
-                    isCheckable = true
-                    isCheckedIconVisible = false
-                    textSize = 13f
-                    chipStrokeWidth = 2f
-                    chipStrokeColor = selectedStroke(context.getColor(R.color.primary))
-                    maxLines = 1
-                }
-                chip.setOnClickListener { refreshTotals() }
-                chip.setOnCheckedChangeListener { c, checked ->
-                    c.typeface = if (checked) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                }
-                if (s.label == selectSpec) chip.isChecked = true
-                vb.cgSpec.addView(chip)
-            }
-            if (selectSpec == null && vb.cgSpec.checkedChipId == -1 && vb.cgSpec.childCount > 0) {
-                (vb.cgSpec.getChildAt(0) as Chip).isChecked = true
-            }
-            vb.etSpecCustom.text?.clear()
-            if (selectSpec != null) {
-                val inList = list.any { it.label == selectSpec }
-                if (!inList) vb.etSpecCustom.setText(selectSpec.removeSuffix("mm²"))
-            }
+        /** 规格选择行显示文本：线缆带 mm² 后缀 */
+        fun specValueText(): String = when {
+            selectedSpec.isBlank() -> "点击选择规格"
+            kind == Kind.WIRE -> specLabel(selectedSpec)
+            else -> selectedSpec
+        }
+
+        fun updateSpecValue() {
+            vb.tvSpecValue.text = specValueText()
+        }
+
+        /** 切分类/重置时选中该分类第一个候选规格（候选池为空则置空待手输） */
+        fun resetSpecDefault() {
+            selectedSpec = if (kind == Kind.BUSBAR) busbarSpecs.firstOrNull()?.label ?: ""
+            else wireSpecs.firstOrNull()?.label ?: ""
+            updateSpecValue()
             refreshTotals()
         }
 
-        /** 构建线缆分组 chips（单芯/2芯/3芯/3+1…），铜排时隐藏 */
-        fun rebuildSpecGroups(selectSpec: String?) {
-            vb.cgSpecGroup.removeAllViews()
-            if (kind != Kind.WIRE) {
-                vb.cgSpecGroup.visibility = View.GONE
-                return
-            }
-            vb.cgSpecGroup.visibility = View.VISIBLE
-            val groups = Repository.wireGroupOrder(wireSpecs.map { it.label })
-            if (selectSpec != null) specGroupKey = Repository.wireGroupKey(selectSpec)
-            if (specGroupKey == null || groups.none { it.first == specGroupKey }) {
-                specGroupKey = groups.firstOrNull()?.first
-            }
-            groups.forEach { (key, title) ->
-                val chip = Chip(context).apply {
-                    text = title
-                    isCheckable = true
-                    isCheckedIconVisible = false
-                    textSize = 13f
-                    chipStrokeWidth = 2f
-                    chipStrokeColor = selectedStroke(context.getColor(R.color.primary))
-                }
-                chip.isChecked = key == specGroupKey
-                chip.setOnClickListener {
-                    specGroupKey = key
-                    rebuildSpecChips(null)
-                }
-                vb.cgSpecGroup.addView(chip)
-            }
-        }
+        /** 二级规格选择弹层：线缆先选芯数分组再选规格，铜排直接选；均支持手动输入 */
+        fun showSpecPicker() {
+            val pv = DialogSpecPickerBinding.inflate(LayoutInflater.from(context))
+            var dlg: AlertDialog? = null
+            var pickGroup: String? = if (kind == Kind.WIRE) {
+                val groups = Repository.wireGroupOrder(wireSpecs.map { it.label })
+                val g = Repository.wireGroupKey(selectedSpec)
+                if (groups.any { it.first == g }) g else groups.firstOrNull()?.first
+            } else null
 
-        /** 重建规格区：先定分组，再按分组展示规格 */
-        fun rebuildSpecSection(selectSpec: String? = presetSpec) {
+            fun applySpec(spec: String) {
+                selectedSpec = spec
+                updateSpecValue()
+                refreshTotals()
+                dlg?.dismiss()
+            }
+
+            fun refreshPickSpecs() {
+                pv.cgPickSpec.removeAllViews()
+                val list = if (kind == Kind.BUSBAR) busbarSpecs
+                else wireSpecs.filter { pickGroup == null || Repository.wireGroupKey(it.label) == pickGroup }
+                var found = false
+                list.forEach { s ->
+                    val chip = Chip(context).apply {
+                        text = if (kind == Kind.BUSBAR) s.label else specLabel(s.label)
+                        isCheckable = true
+                        isCheckedIconVisible = false
+                        textSize = 13f
+                        chipStrokeWidth = 2f
+                        chipStrokeColor = selectedStroke(context.getColor(R.color.primary))
+                        maxLines = 1
+                    }
+                    if (s.label == selectedSpec) {
+                        chip.isChecked = true
+                        found = true
+                    }
+                    chip.setOnClickListener { applySpec(s.label) }
+                    chip.setOnCheckedChangeListener { c, checked ->
+                        c.typeface = if (checked) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                    }
+                    pv.cgPickSpec.addView(chip)
+                }
+                // 当前规格不在候选池（自定义过）→ 回填到手动输入框
+                if (!found && selectedSpec.isNotBlank()) pv.etPickCustom.setText(selectedSpec)
+            }
+
             if (kind == Kind.WIRE) {
-                rebuildSpecGroups(selectSpec)
-            } else {
-                vb.cgSpecGroup.removeAllViews()
-                vb.cgSpecGroup.visibility = View.GONE
-                specGroupKey = null
+                pv.tvPickGroupLabel.visibility = View.VISIBLE
+                pv.cgPickGroup.visibility = View.VISIBLE
+                Repository.wireGroupOrder(wireSpecs.map { it.label }).forEach { (key, title) ->
+                    val chip = Chip(context).apply {
+                        text = title
+                        isCheckable = true
+                        isCheckedIconVisible = false
+                        textSize = 13f
+                        chipStrokeWidth = 2f
+                        chipStrokeColor = selectedStroke(context.getColor(R.color.primary))
+                    }
+                    chip.isChecked = key == pickGroup
+                    chip.setOnClickListener {
+                        pickGroup = key
+                        refreshPickSpecs()
+                    }
+                    chip.setOnCheckedChangeListener { c, checked ->
+                        c.typeface = if (checked) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                    }
+                    pv.cgPickGroup.addView(chip)
+                }
             }
-            rebuildSpecChips(selectSpec)
-        }
+            pv.etPickCustom.hint = if (kind == Kind.WIRE) "如 3×2.5+1×1.5（多芯）" else "如 40×5（宽×厚）"
+            refreshPickSpecs()
 
+            dlg = AlertDialog.Builder(context)
+                .setTitle("选择规格")
+                .setView(pv.root)
+                .setNegativeButton("关闭", null)
+                .show()
+
+            pv.btnPickUse.setOnClickListener {
+                val t = pv.etPickCustom.text.toString().trim()
+                if (t.isEmpty()) {
+                    Toast.makeText(context, "请先输入规格", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (kind == Kind.WIRE) {
+                    val n = Repository.normalizeWireSpec(t)
+                    if (!Repository.isValidWireSpec(n)) {
+                        Toast.makeText(context, "线缆规格需为数字（如 1.5）或多芯（如 3×2.5）", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    applySpec(n)
+                } else {
+                    if (!Repository.isBusbarLike(t)) {
+                        Toast.makeText(context, "铜排规格需含 ×，如 40×5", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    applySpec(t)
+                }
+            }
+        }
 
         fun rebuildColorChips(selectColor: String? = presetColor) {
             vb.cgColor.removeAllViews()
@@ -275,7 +315,9 @@ object QuickRecordDialog {
             if (!appendMode) {
                 vb.chipKindWire.isChecked = s.kind == Kind.WIRE
                 vb.chipKindBusbar.isChecked = s.kind == Kind.BUSBAR
-                rebuildSpecSection(s.spec)
+                selectedSpec = s.spec
+                updateSpecValue()
+                vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚 mm）" else "规格（截面 mm²）"
                 rebuildColorChips(s.color)
             }
             vb.etLength.setText(s.lengths.joinToString("\n") { (it / unit.toMm).toString() })
@@ -317,33 +359,29 @@ object QuickRecordDialog {
             vb.tvKindLabel.visibility = View.GONE
             vb.cgKind.visibility = View.GONE
             vb.tvSpecLabel.visibility = View.GONE
-            vb.cgSpec.visibility = View.GONE
-            vb.cgSpecGroup.visibility = View.GONE
-            vb.etSpecCustom.visibility = View.GONE
+            vb.llSpecSelector.visibility = View.GONE
             vb.tvColorLabel.visibility = View.GONE
             vb.cgColor.visibility = View.GONE
         } else {
             vb.chipKindWire.isChecked = kind == Kind.WIRE
             vb.chipKindBusbar.isChecked = kind == Kind.BUSBAR
-            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²，可按芯数分组）"
+            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚 mm）" else "规格（截面 mm²）"
+            vb.llSpecSelector.setOnClickListener { showSpecPicker() }
         }
 
-        vb.tvLenLabel.text = "每根长度（${unit.label} ${unit.code}，每行一根，可用 85×5 表示 5 根）"
-        vb.etLength.hint = "每行填一根（单位 ${unit.label}，可一次多行），例如：\n85\n32×5（=5根32）"
+        vb.tvLenLabel.text = "每根长度（${unit.label} ${unit.code}，每行一根；85×5=5根各85，支持 +−×÷ 括号）"
+        vb.etLength.hint = "每行一根（可一次多行），例如：\n85\n32×5（=5根32）\n(1850+320)×2"
 
         vb.cgKind.setOnCheckedStateChangeListener { _, _ ->
-            val newKind = if (vb.chipKindBusbar.isChecked) Kind.BUSBAR else Kind.WIRE
-            if (newKind != kind) specGroupKey = null
-            kind = newKind
-            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚，单位 mm）" else "规格（截面 mm²，可按芯数分组）"
-            rebuildSpecSection()
+            kind = if (vb.chipKindBusbar.isChecked) Kind.BUSBAR else Kind.WIRE
+            vb.tvSpecLabel.text = if (kind == Kind.BUSBAR) "规格（宽×厚 mm）" else "规格（截面 mm²）"
+            resetSpecDefault()
             rebuildColorChips()
         }
-        vb.etSpecCustom.addTextChangedListener(textWatcher { refreshTotals() })
         vb.etLength.addTextChangedListener(textWatcher { refreshTotals() })
 
         if (!appendMode) {
-            rebuildSpecSection()
+            resetSpecDefault()
             rebuildColorChips()
         }
         refreshTotals()

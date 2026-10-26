@@ -8,7 +8,8 @@
 projects(配电柜项目，多项目分开统计) → records(用线/用铜记录，截一根记一根) + specs/colors(规格·颜色候选池)。
 
 - records 字段：kind(wire/busbar) / spec(线缆=单芯截面数字串如"1.5"，或多芯"3×2.5"/"4×4+1×2.5"；铜排=宽×厚如"40×5") / color(仅线缆，铜排为""；市面常用国标线色) / lengthMm(毫米，唯一计量单位) / note / createdAt
-- 录入长度支持多行每行一根 + "85×5"同长多根批量（Repository.parseLengths 展开，根数上限500）；默认录入单位(mm/cm/m)存 SharedPreferences(util/LengthUnit)，录入时换算为毫米后入库，DB 内永远毫米
+- 录入长度支持多行每行一根 + "85×5"同长多根批量（Repository.parseLengths 展开，根数上限500）+ 常规四则运算（+−×÷ 与括号，先乘除后加减，结果四舍五入；纯"数字×数字"仍是批量语义，含 +−÷ 或括号才按算式求值）；parseLengths 返回当前单位 Double 值（允许小数如 0.85 米），毫米换算取整由调用方完成；默认录入单位(mm/cm/m)存 SharedPreferences(util/LengthUnit)，录入时换算为毫米后入库，DB 内永远毫米
+- 录入弹窗规格为紧凑选择行（一行显示当前规格，点击弹二级 dialog_spec_picker：线缆先芯数分组再选规格，支持手动输入），不再平铺 chips
 - **累加语义**：不做预先生成的"台账行"，全部按 GROUP BY 规格×颜色 在内存累加（Repository.aggregate），同一规格×颜色自动汇总，改任何一段必须回归 AggregateTest
 - 候选池种子改为**增量补齐**（seedIfEmpty/seedSpecs）：只插入缺失项，老用户升级后也能补进新内置规格，重复启动不产生重复
 - 候选池内置：线缆单芯 1.0~240 mm²(16档) + 多芯常用档(2/3/4/5芯 及 3+1/3+2/4+1)；颜色 9 色；铜排 20×3~125×10(23档)

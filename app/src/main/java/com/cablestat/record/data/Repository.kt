@@ -43,9 +43,9 @@ data class ProjectCard(
     val stats: ProjectStats
 )
 
-/** 多行长度输入的解析结果：合法长度列表 + 无法识别片段 */
+/** 多行长度输入的解析结果：合法长度列表 + 无法识别片段。ok 为当前录入单位数值（允许小数，毫米换算取整由调用方完成） */
 data class LengthParse(
-    val ok: List<Long>,
+    val ok: List<Double>,
     val invalid: List<String>
 )
 
@@ -238,23 +238,21 @@ class Repository(private val db: AppDatabase) {
             spec.any { it == '×' || it == 'x' || it == 'X' || it == '*' }
 
         /**
-         * 解析长度输入：每行一根，兼容空格/逗号/分号分隔；
-         * 同一长度多根可用 "85×5"（85 五根，× 也可用 *），自动展开为明细。
-         * 片段必须为纯数字或 "数字×数字"，长度与根数均需大于 0，根数上限 [MAX_MULTIPLY]。
-         * 返回值按当前默认长度单位的原始数值（单位换算由调用方完成）。
+         * 解析长度输入：每行一根，换行/逗号/分号（半角全角）为分隔符，行内空格在算式中忽略。
+         * 每段支持两种写法：
+         * 1. 批量："85×5"（85 五根，× 也可用 * / x / X），自动展开为明细，根数上限 [MAX_MULTIPLY]；
+         * 2. 算式：+ - × ÷ 与括号的常规四则运算（先乘除后加减，括号优先），如 "(1850+320)×2"，
+         *    结果按毫米换算前先校验（当前单位下四舍五入取整需大于 0）。
+         * 返回 ok 为当前录入单位的数值列表（允许小数，如 0.85 米；换算毫米由调用方完成）。
          */
         fun parseLengths(text: String): LengthParse {
-            val ok = mutableListOf<Long>()
+            val ok = mutableListOf<Double>()
             val invalid = mutableListOf<String>()
-            // 先把乘法片段内部空白归一（"32 × 3" → "32×3"），避免被分隔符切散
-            val normalized = MUL_REGEX.replace(text) { m ->
-                "${m.groupValues[1]}×${m.groupValues[2]}"
-            }
-            normalized.split(SEPARATORS)
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .forEach { t ->
-                    if (!parseToken(t, ok)) invalid.add(t)
+            normalizeLengthText(text).split(STRONG_SEPARATORS)
+                .forEach { line ->
+                    splitExprTokens(line).forEach { t ->
+                        if (t.isNotEmpty() && !parseToken(t, ok)) invalid.add(t)
+                    }
                 }
             return LengthParse(ok, invalid)
         }
@@ -262,25 +260,55 @@ class Repository(private val db: AppDatabase) {
         /** 同长度多根展开上限，防止误输入导致展开过大 */
         private const val MAX_MULTIPLY = 500
 
-        /** "850" 或 "850×5" → 追加到 out；成功返回 true */
-        private fun parseToken(t: String, out: MutableList<Long>): Boolean {
-            MUL_REGEX.matchEntire(t)?.let { m ->
-                val len = m.groupValues[1].toLong()
-                val count = m.groupValues[2].toLong()
+        /** 单根长度上限（当前录入单位），防止误输入超大数 */
+        private const val MAX_LENGTH_VALUE = 1_000_000.0
+
+        /** 强分隔符：换行/逗号/分号（半角全角），分割多根 */
+        private val STRONG_SEPARATORS = Regex("[\\n,，;；]+")
+
+        /** 行内空白切分（含全角空格） */
+        private val TOKEN_SPLIT = Regex("[\\s　]+")
+
+        /** 批量写法："85×5"（85 五根）——归一后 ×/＊ 均为 *，兼容 x/X */
+        private val BATCH_REGEX = Regex("^(\\d+(?:\\.\\d+)?)[xX*](\\d+)$")
+
+        /** 归一长度输入：全角标点/运算符转半角，×/÷ 统一为 * 与 / */
+        private fun normalizeLengthText(text: String): String = text
+            .replace('，', ',').replace('；', ';')
+            .replace('＋', '+').replace('－', '-').replace('—', '-').replace('–', '-')
+            .replace('×', '*').replace('＊', '*')
+            .replace('÷', '/').replace('／', '/')
+            .replace('（', '(').replace('）', ')')
+
+        /** 行内按空白切段，并在运算符边界把被空格拆散的算式拼回（"1850 + 320" → "1850+320"） */
+        private fun splitExprTokens(line: String): List<String> {
+            val raw = line.trim().split(TOKEN_SPLIT).filter { it.isNotEmpty() }
+            if (raw.isEmpty()) return emptyList()
+            val out = mutableListOf(raw[0])
+            for (i in 1 until raw.size) {
+                val prev = out.last()
+                val next = raw[i]
+                val boundaryOp = prev.last() in "+-*/()" || next.first() in "+-*/()"
+                if (boundaryOp) out[out.lastIndex] = prev + next else out.add(next)
+            }
+            return out
+        }
+
+        /** "850" / "85×5"（批量展开） / "(1850+320)×2"（四则运算） → 追加到 out；成功返回 true */
+        private fun parseToken(t: String, out: MutableList<Double>): Boolean {
+            BATCH_REGEX.matchEntire(t)?.let { m ->
+                val len = m.groupValues[1].toDoubleOrNull() ?: return false
+                val count = m.groupValues[2].toLongOrNull() ?: return false
                 if (len <= 0 || count <= 0 || count > MAX_MULTIPLY) return false
                 repeat(count.toInt()) { out.add(len) }
                 return true
             }
-            val v = t.toLongOrNull()
-            if (v != null && v > 0) {
-                out.add(v)
-                return true
-            }
-            return false
+            val v = ExprParser(t).evaluate() ?: return false
+            val rounded = Math.round(v)
+            if (rounded <= 0 || rounded > MAX_LENGTH_VALUE.toLong()) return false
+            out.add(v)
+            return true
         }
-
-        private val SEPARATORS = Regex("[,\\n，;；\\s]+")
-        private val MUL_REGEX = Regex("(\\d+)\\s*[xX×*]\\s*(\\d+)")
     }
 
     // ---------- 项目 ----------
@@ -462,4 +490,62 @@ class Repository(private val db: AppDatabase) {
     suspend fun wireSpecs(): List<SpecEntity> = db.specDao().listByKind(Kind.WIRE)
     suspend fun busbarSpecs(): List<SpecEntity> = db.specDao().listByKind(Kind.BUSBAR)
     suspend fun colors(): List<ColorEntity> = db.colorDao().listAll()
+}
+
+/** 常规四则运算求值：+ - * / 与括号，先乘除后加减，支持一元正负号与小数；除零/语法错返回 null */
+private class ExprParser(private val s: String) {
+    private var pos = 0
+
+    fun evaluate(): Double? {
+        val v = expr() ?: return null
+        return if (pos == s.length && v.isFinite()) v else null
+    }
+
+    /** 加减（最后算） */
+    private fun expr(): Double? {
+        var v = term() ?: return null
+        while (pos < s.length && (s[pos] == '+' || s[pos] == '-')) {
+            val op = s[pos++]
+            val r = term() ?: return null
+            v = if (op == '+') v + r else v - r
+        }
+        return v
+    }
+
+    /** 乘除（先算） */
+    private fun term(): Double? {
+        var v = factor() ?: return null
+        while (pos < s.length && (s[pos] == '*' || s[pos] == '/')) {
+            val op = s[pos++]
+            val r = factor() ?: return null
+            v = when {
+                op == '*' -> v * r
+                r == 0.0 -> return null
+                else -> v / r
+            }
+        }
+        return v
+    }
+
+    /** 因子：数字 / 括号内子式 / 一元正负号 */
+    private fun factor(): Double? {
+        if (pos >= s.length) return null
+        when (s[pos]) {
+            '(' -> {
+                pos++
+                val v = expr() ?: return null
+                if (pos >= s.length || s[pos] != ')') return null
+                pos++
+                return v
+            }
+            '+' -> { pos++; return factor() }
+            '-' -> { pos++; return factor()?.let { -it } }
+            in '0'..'9', '.' -> {
+                val start = pos
+                while (pos < s.length && (s[pos].isDigit() || s[pos] == '.')) pos++
+                return s.substring(start, pos).toDoubleOrNull()
+            }
+            else -> return null
+        }
+    }
 }

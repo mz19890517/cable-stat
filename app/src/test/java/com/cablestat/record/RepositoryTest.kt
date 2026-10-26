@@ -257,21 +257,21 @@ class SpecParseTest {
     @Test
     fun parseLengthsSplitsMultiLine() {
         val r = Repository.parseLengths("1850\n3200\n1500")
-        assertEquals(listOf(1850L, 3200L, 1500L), r.ok)
+        assertEquals(listOf(1850.0, 3200.0, 1500.0), r.ok)
         assertEquals(0, r.invalid.size)
     }
 
     @Test
     fun parseLengthsToleratesSeparatorsAndWhitespace() {
         val r = Repository.parseLengths("1850, 3200；1500 950，")
-        assertEquals(listOf(1850L, 3200L, 1500L, 950L), r.ok)
+        assertEquals(listOf(1850.0, 3200.0, 1500.0, 950.0), r.ok)
         assertEquals(0, r.invalid.size)
     }
 
     @Test
     fun parseLengthsFlagsInvalidTokens() {
         val r = Repository.parseLengths("1850\nabc\n0\n-5")
-        assertEquals(listOf(1850L), r.ok)
+        assertEquals(listOf(1850.0), r.ok)
         assertEquals(3, r.invalid.size)
     }
 
@@ -285,14 +285,14 @@ class SpecParseTest {
     @Test
     fun parseLengthsMultipliesSameLength() {
         val r = Repository.parseLengths("85×5\n32*3\n95x2")
-        assertEquals(listOf(85L, 85L, 85L, 85L, 85L, 32L, 32L, 32L, 95L, 95L), r.ok)
+        assertEquals(listOf(85.0, 85.0, 85.0, 85.0, 85.0, 32.0, 32.0, 32.0, 95.0, 95.0), r.ok)
         assertEquals(0, r.invalid.size)
     }
 
     @Test
     fun parseLengthsMultipliesMixedWithSeparators() {
         val r = Repository.parseLengths("85×5, 850，32 × 3")
-        assertEquals(listOf(85L, 85L, 85L, 85L, 85L, 850L, 32L, 32L, 32L), r.ok)
+        assertEquals(listOf(85.0, 85.0, 85.0, 85.0, 85.0, 850.0, 32.0, 32.0, 32.0), r.ok)
         assertEquals(0, r.invalid.size)
     }
 
@@ -301,6 +301,44 @@ class SpecParseTest {
         val r = Repository.parseLengths("85×0\n85×501\n0×3")
         assertEquals(0, r.ok.size)
         assertEquals(3, r.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsArithmetic() {
+        // 先乘除后加减
+        assertEquals(listOf(2170.0), Repository.parseLengths("1850+320").ok)
+        assertEquals(listOf(4340.0), Repository.parseLengths("(1850+320)×2").ok)
+        assertEquals(listOf(2490.0), Repository.parseLengths("1850+320×2").ok)
+        assertEquals(listOf(850.0 / 3), Repository.parseLengths("850÷3").ok)
+        assertEquals(listOf(0.5), Repository.parseLengths("1÷2").ok)
+        // 空格不打散算式
+        assertEquals(listOf(2170.0), Repository.parseLengths("1850 + 320").ok)
+        assertEquals(listOf(4340.0), Repository.parseLengths("( 1850 + 320 ) × 2").ok)
+        // 小数与一元负号
+        assertEquals(listOf(10.0), Repository.parseLengths("2.5+7.5").ok)
+        assertEquals(listOf(5.0), Repository.parseLengths("10-2×2.5").ok)
+        // 批量与算式共存
+        val mixed = Repository.parseLengths("(85)×5\n85×5")
+        assertEquals(listOf(425.0, 85.0, 85.0, 85.0, 85.0, 85.0), mixed.ok)
+        assertEquals(0, mixed.invalid.size)
+    }
+
+    @Test
+    fun parseLengthsRejectsBadArithmetic() {
+        // 除零 / 括号不闭合 / 语法残缺 / 结果非正
+        assertEquals(0, Repository.parseLengths("10÷0").ok.size)
+        assertEquals(0, Repository.parseLengths("(1850+320").ok.size)
+        assertEquals(0, Repository.parseLengths("1850+").ok.size)
+        assertEquals(0, Repository.parseLengths("1-2").ok.size)
+        assertEquals(0, Repository.parseLengths("1850..5+3").ok.size)
+        assertEquals(5, Repository.parseLengths("10÷0\n(1850+320\n1850+\n1-2\n3x2.5").invalid.size)
+    }
+
+    @Test
+    fun parseLengthsKeepsDecimalsForUnitConversion() {
+        // ok 保留小数原值，毫米换算四舍五入由调用方完成（0.283333米 → 283mm）
+        assertEquals(listOf(0.85 / 3), Repository.parseLengths("0.85÷3").ok)
+        assertEquals(listOf(8.5, 8.5, 8.5), Repository.parseLengths("8.5×3").ok)
     }
 }
 
