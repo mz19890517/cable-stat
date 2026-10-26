@@ -7,7 +7,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:padding="14dp">
 
         <TextView
             android:id="@+id/tv_append_summary"
@@ -24,15 +24,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="分类"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary" />
+            android:textColor="@color/text_label" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/cg_kind"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             app:singleSelection="true"
             app:selectionRequired="true">
 
@@ -58,24 +58,24 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="规格"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:layout_marginTop="16dp" />
+            android:textColor="@color/text_label"
+            android:layout_marginTop="12dp" />
 
         <!-- 紧凑规格选择器：一行显示当前规格，点击弹出二级选择（分组→规格/手动输入） -->
         <LinearLayout
             android:id="@+id/ll_spec_selector"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_input"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
-            android:minHeight="48dp"
+            android:minHeight="44dp"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp">
+            android:paddingHorizontal="12dp">
 
             <TextView
                 android:id="@+id/tv_spec_value"
@@ -100,16 +100,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="颜色"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:layout_marginTop="16dp" />
+            android:textColor="@color/text_label"
+            android:layout_marginTop="12dp" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/cg_color"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             app:singleSelection="true">
 
             <!-- 颜色 chips 动态填充 -->
@@ -120,21 +120,24 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="每根长度（毫米 mm，每行一根）"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:layout_marginTop="16dp" />
+            android:textColor="@color/text_label"
+            android:layout_marginTop="12dp" />
 
         <EditText
             android:id="@+id/et_length"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_input"
+            android:padding="10dp"
             android:gravity="top|start"
             android:minLines="3"
             android:hint="每行填一根，例如：&#10;1850&#10;3200&#10;1500"
             android:inputType="textMultiLine"
-            android:importantForAutofill="no"
-            android:layout_marginTop="8dp" />
+            android:textColorHint="@color/text_hint"
+            android:importantForAutofill="no" />
 
         <TextView
             android:id="@+id/tv_length_preview"
@@ -159,25 +162,28 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="备注（可空）"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:layout_marginTop="12dp" />
+            android:textColor="@color/text_label"
+            android:layout_marginTop="10dp" />
 
         <EditText
             android:id="@+id/et_note"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/bg_input"
+            android:padding="10dp"
             android:hint="例如：出线到电抗器"
             android:inputType="text"
-            android:importantForAutofill="no"
-            android:layout_marginTop="6dp" />
+            android:textColorHint="@color/text_hint"
+            android:importantForAutofill="no" />
 
         <TextView
             android:id="@+id/tv_stage_add_btn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:padding="12dp"
             android:gravity="center"
             android:text="＋ 添加到批量列表"
@@ -190,11 +196,11 @@
             android:id="@+id/tv_staging_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:text="批量列表（点击项可编辑/删除）"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_secondary"
+            android:textColor="@color/text_label"
             android:visibility="gone" />
 
         <LinearLayout
@@ -209,7 +215,7 @@
             android:id="@+id/btn_stage_submit"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:padding="14dp"
             android:gravity="center"
             android:text="全部入库"

@@ -15,8 +15,8 @@ android {
         applicationId = "com.cablestat.record"
         minSdk = 28
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
 
     // 签名密码经环境变量注入（GitHub Secrets），仓库内不出现明文

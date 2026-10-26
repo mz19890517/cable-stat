@@ -4,9 +4,12 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.cablestat.record.R
@@ -279,22 +282,28 @@ object QuickRecordDialog {
         fun rebuildColorChips(selectColor: String? = presetColor) {
             vb.cgColor.removeAllViews()
             colors.forEach { c ->
+                val isWhite = WireColor.of(c.label) == Color.WHITE
                 val chip = Chip(context).apply {
                     text = c.label
                     isCheckable = true
-                    isCheckedIconVisible = false
+                    // 选中打勾：白底用深色勾、彩色底用白色勾，一眼看清选了谁
+                    checkedIcon = androidx.appcompat.content.res.AppCompatResources.getDrawable(
+                        context, R.drawable.ic_check_sel
+                    )
+                    checkedIconTint = ColorStateList.valueOf(
+                        if (isWhite) Color.parseColor("#37474F") else Color.WHITE
+                    )
+                    isCheckedIconVisible = true
                     textSize = 13f
                     chipBackgroundColor = ColorStateList.valueOf(WireColor.of(c.label))
                     setTextColor(
                         ColorStateList.valueOf(
-                            if (WireColor.of(c.label) == Color.WHITE) Color.parseColor("#37474F") else Color.WHITE
+                            if (isWhite) Color.parseColor("#37474F") else Color.WHITE
                         )
                     )
+                    // 选中深色描边环（未选中透明），浅色/白色 chip 也清晰可辨
                     chipStrokeWidth = 3f
-                    chipStrokeColor = selectedStroke(
-                        if (WireColor.of(c.label) == Color.WHITE) context.getColor(R.color.primary)
-                        else Color.WHITE
-                    )
+                    chipStrokeColor = selectedStroke(context.getColor(R.color.text_primary))
                 }
                 chip.setOnClickListener { refreshTotals() }
                 chip.setOnCheckedChangeListener { cc, checked ->
@@ -394,6 +403,16 @@ object QuickRecordDialog {
             .setPositiveButton("保存", null)
             .setNegativeButton("取消", null)
             .show()
+
+        // 铺满屏幕：像正常整页窗口，四周不留空隙；键盘弹出时压缩内容可滚动
+        dialog.window?.apply {
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            setBackgroundDrawable(ColorDrawable(context.getColor(R.color.bg_window)))
+            setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                    or WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
+            )
+        }
 
         // 保存 = 直接提交当前表单（等价“入库”当前这一笔）
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
